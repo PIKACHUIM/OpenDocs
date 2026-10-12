@@ -53,3 +53,4 @@ Thumbs.db
 
 # playwright-cli local debugging artifacts
 /.playwright-cli
+wrangler.test.jsonc

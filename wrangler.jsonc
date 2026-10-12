@@ -1,0 +1,59 @@
+{
+	// Cloudflare Workers 配置（Workers + Static Assets，取代原先的 Cloudflare Pages）。
+	//
+	// 为什么不是 Pages：Cloudflare 官方 2025-04 博客已明确——新项目应直接用 Workers 起步，
+	// Pages 不再获得新功能投入（仍会被支持，但功能已冻结）。业务代码一字未改，
+	// 只是把平台适配层从 functions/api/[[path]].ts 换成 platform/cloudflare/worker.ts，
+	// 并把路由规则从 Pages 专属的 _routes.json 迁到这里的 assets.run_worker_first。
+	//
+	// 用法：
+	//   npx wrangler d1 create drawnix              -> 拿到 database_id 填到下面
+	//   npx wrangler d1 execute drawnix --remote --file=./migrations/0001_init.sql
+	//   npx wrangler r2 bucket create drawnix-files
+	//   npm run build:web && npx wrangler deploy
+	//
+	// 数据分工：D1 存结构化数据（用户/会话/文档元数据/设置），R2 存文档内容与图片等大对象。
+	// 两者都是必需绑定——D1 不再承担文件存储职责，不存在「无 R2 时退化」的说法。
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "drawnixs-cfworker",
+	"main": "platform/cloudflare/worker.ts",
+	"compatibility_date": "2026-09-01",
+	"assets": {
+		// nx build web 的产物目录；部署前必须先跑一遍 build:web
+		"directory": "./dist/apps/web",
+		"binding": "ASSETS",
+		// 没有命中任何静态文件时回退到 index.html（SPA 路由）。
+		// 注意：不要再加 apps/web/public/_redirects 的 `/* /index.html 200` 做同样的事——
+		// 这条"代理"规则会和 html_handling 的路径归一化互相触发，被 wrangler deploy 判定为
+		// 死循环直接拒绝部署（Invalid _redirects configuration, code 100324）。
+		"not_found_handling": "single-page-application",
+		// 只有 /api/* 才真正唤起这个 Worker 跑 Hono；其余请求完全不经过 Worker，
+		// 由资产层直接命中边缘缓存返回——免费额度更充裕，延迟也更低
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "drawnix",
+			"database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "drawnix-files"
+		}
+	],
+	// 注意：wrangler deploy 会用这里的 vars 覆盖控制台里同名「普通变量」。
+	// 需要长期保留或保密的配置（密码、API Key）请用 Secret，Secret 不会被覆盖：
+	//   npx wrangler secret put ADMIN_PASSWORD
+	//   npx wrangler secret put RESEND_API_KEY
+	//   npx wrangler secret put TURNSTILE_SECRET_KEY
+	"vars": {
+		// 首个注册的账号自动成为管理员；生产环境建议部署完成后改为 "false"
+		"BOOTSTRAP_FIRST_ADMIN": "true",
+		"ALLOW_REGISTRATION": "true"
+	}
+}

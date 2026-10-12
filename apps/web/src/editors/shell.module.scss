@@ -1,0 +1,83 @@
+.shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #e4e7ec;
+  flex-shrink: 0;
+  background: #fff;
+  z-index: 10;
+}
+
+.icon {
+  font-size: 18px;
+}
+
+.titleInput {
+  width: 220px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #1f2329;
+  font-size: 14px;
+  font-weight: 500;
+
+  &:hover:not(:disabled) {
+    border-color: #e4e7ec;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #4a6cf7;
+    background: #fff;
+  }
+
+  &:disabled {
+    color: #6b7280;
+  }
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: #6b7280;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9aa4b2;
+}
+
+.dotSaved {
+  background: #12b76a;
+}
+
+.dotBusy {
+  background: #f79009;
+}
+
+.dotError {
+  background: #e5484d;
+}
+
+.body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}

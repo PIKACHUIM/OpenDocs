@@ -10,6 +10,14 @@ export default defineConfig({
   server: {
     port: 7200,
     host: 'localhost',
+    // 本地开发时把 /api 转发到后端（npm run dev:api 默认监听 8788）
+    // 生产环境由 Pages Functions / EdgeOne Cloud Functions 同域处理，无需代理
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8788',
+        changeOrigin: false,
+      },
+    },
   },
 
   preview: {
