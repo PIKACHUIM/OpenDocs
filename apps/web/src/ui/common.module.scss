@@ -591,3 +591,67 @@ $radius: 10px;
   font-weight: 600;
   flex-shrink: 0;
 }
+
+// ---------------------------------------------------------------------------
+// 首页（/）的云端入口
+// 固定在左下角：Drawnix 的工具栏占了左上/中上/右上/右下四个位置，左下是空的。
+// 用品牌色描边 + 阴影 + 圆点状态标识，保证在白画布上足够显眼。
+// ---------------------------------------------------------------------------
+
+.cloudEntry {
+  position: fixed;
+  left: 36px;
+  bottom: 36px;
+  z-index: 300;
+  box-sizing: border-box;
+  width: 248px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba($primary, 0.28);
+  background: $bg;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  font-family: inherit;
+
+  // 窄屏下别把画布挡住太多
+  @media (max-width: 600px) {
+    left: 16px;
+    bottom: 16px;
+    width: calc(100vw - 32px);
+  }
+}
+
+.cloudEntryHead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.cloudEntryDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $primary;
+  box-shadow: 0 0 0 3px rgba($primary, 0.18);
+  flex-shrink: 0;
+}
+
+.cloudEntryTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text;
+}
+
+.cloudEntryHint {
+  margin: 0 0 11px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: $muted;
+  word-break: break-all;
+}
+
+.cloudEntryActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

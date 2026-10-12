@@ -11,6 +11,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 import { VerifyEmailPage } from '../pages/VerifyEmailPage';
+import { CloudEntry } from '../ui/CloudEntry';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
@@ -154,7 +155,12 @@ function Router() {
 
   switch (route.kind) {
     case 'local':
-      return <LocalWhiteboard />;
+      return (
+        <>
+          <LocalWhiteboard />
+          <CloudEntry />
+        </>
+      );
     case 'login':
       return <LoginPage />;
     case 'register':
