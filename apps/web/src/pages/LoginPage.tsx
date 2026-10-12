@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../api';
-import { navigate } from '../lib/router';
+import { getRedirectTarget, navigate } from '../lib/router';
 import { useAuth } from '../lib/auth';
 import { Turnstile } from '../ui/Turnstile';
 import styles from '../ui/common.module.scss';
@@ -20,7 +20,8 @@ export function LoginPage() {
     setError(null);
     try {
       await login(email.trim(), password, turnstileToken ?? undefined);
-      navigate('/documents');
+      // 若是因为访问受保护页面被弹到登录页，登录后回到原来那个页面
+      navigate(getRedirectTarget() ?? '/');
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '登录失败，请重试');
     } finally {
@@ -80,9 +81,6 @@ export function LoginPage() {
           ) : (
             <a onClick={() => navigate('/register')}>还没有账号？去注册</a>
           )}
-          <div style={{ marginTop: 10 }}>
-            <a onClick={() => navigate('/')}>继续使用本地白板（无需登录）</a>
-          </div>
         </div>
       </div>
     </div>

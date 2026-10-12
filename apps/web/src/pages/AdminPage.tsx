@@ -39,7 +39,7 @@ function formatTime(value: string): string {
 }
 
 export function AdminPage() {
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, refresh } = useAuth();
   const [tab, setTab] = useState<Tab>('overview');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -185,6 +185,8 @@ export function AdminPage() {
       });
       setSettings(updated);
       setSettingsForm((previous) => (previous ? { ...previous, resendApiKey: '', turnstileSecretKey: '' } : previous));
+      // 重新拉一次公开配置，让站点名称等改动立即生效（如标签页标题）
+      await refresh();
     }, '设置已保存');
   };
 

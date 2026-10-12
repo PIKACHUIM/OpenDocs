@@ -52,6 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // 标签页标题跟随后台「系统设置 → 站点名称」。
+  // index.html 里写死的 <title> 只是首屏兜底，拿到配置后就会被覆盖。
+  useEffect(() => {
+    const siteName = config?.siteName?.trim();
+    if (siteName) document.title = siteName;
+  }, [config]);
+
   const login = useCallback(async (email: string, password: string, turnstileToken?: string) => {
     const data = await authApi.login({ email, password, turnstileToken });
     setUser(data.user);
