@@ -597,3 +597,68 @@ export const FontSizeStepperDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = 
     </svg>
   );
 };
+
+export const SunIcon = createIcon(
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" />
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 3v1M12 20v1M3 12h1M20 12h1M5.6 5.6l.7 .7M17.7 17.7l.7 .7M5.6 18.4l.7 -.7M17.7 6.3l.7 -.7" />
+  </svg>
+);
+
+export const MoonIcon = createIcon(
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" />
+    <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+  </svg>
+);
+
+export const MonitorIcon = createIcon(
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" />
+    <rect x="3" y="4" width="18" height="13" rx="2" />
+    <path d="M7 20h10M9 17v3M15 17v3" />
+  </svg>
+);
+
+export const PaletteIcon = createIcon(
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" />
+    <path d="M12 21a9 9 0 0 1 0 -18c4.97 0 9 3.582 9 8c0 1.06 -.474 2.078 -1.318 2.828c-.844 .75 -1.989 1.172 -3.182 1.172h-2.5a2 2 0 0 0 -1 3.75a1.3 1.3 0 0 1 -1 2.25" />
+    <circle cx="7.5" cy="10.5" r="0.75" fill="currentColor" />
+    <circle cx="12" cy="7.5" r="0.75" fill="currentColor" />
+    <circle cx="16.5" cy="10.5" r="0.75" fill="currentColor" />
+  </svg>
+);

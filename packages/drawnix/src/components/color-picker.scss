@@ -12,7 +12,7 @@
     border-color: var(--color-primary);
     &.no-color {
       .selected-icon {
-        background-color: #ffffff;
+        background-color: var(--island-bg-color);
       }
     }
   }
@@ -30,7 +30,8 @@
       display: block;
       width: var(--default-button-size);
       height: var(--default-button-size);
-      color: rgba(#000000, 0.4);
+      color: var(--color-on-surface);
+      opacity: 0.6;
     }
   }
 }

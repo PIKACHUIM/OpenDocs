@@ -10,7 +10,7 @@
   p {
     margin: 0;
     font-size: 14px;
-    color: #888;
+    color: var(--color-on-surface, #888);
     line-height: 1.5;
   }
 

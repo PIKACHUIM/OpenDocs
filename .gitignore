@@ -5,6 +5,13 @@ dist
 tmp
 /out-tsc
 
+# 后端构建产物：由 `npm run build:edge` 生成，EdgeOne 部署时会在构建阶段重新产出。
+# 若你使用「从本地目录部署」并希望把产物一并提交，可用 git add -f cloud-functions 强制加入。
+/cloud-functions
+
+# 本地开发数据：node:sqlite 数据库文件 + 磁盘文件存储，仅用于本地调试
+/.data
+
 # dependencies
 node_modules
 
@@ -43,3 +50,6 @@ Thumbs.db
 
 .claude/worktrees
 .claude/settings.local.json
+
+# playwright-cli local debugging artifacts
+/.playwright-cli

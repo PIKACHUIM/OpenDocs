@@ -83,6 +83,21 @@ const viTranslations: Translations = {
   'language.arabic': 'عربي',
   'language.vietnamese': 'Tiếng Việt',
 
+  // Appearance
+  'appearance.switcher': 'Giao diện',
+  'appearance.light': 'Sáng',
+  'appearance.dark': 'Tối',
+  'appearance.system': 'Theo hệ thống',
+
+  // Theme color
+  'colorTheme.switcher': 'Màu chủ đề',
+  'colorTheme.blue': 'Xanh da trời',
+  'colorTheme.violet': 'Tím',
+  'colorTheme.green': 'Xanh lá',
+  'colorTheme.orange': 'Cam',
+  'colorTheme.pink': 'Hồng',
+  'colorTheme.teal': 'Xanh ngọc',
+
   // Menu items
   'menu.open': 'Mở',
   'menu.saveFile': 'Lưu vào tệp hiện tại',

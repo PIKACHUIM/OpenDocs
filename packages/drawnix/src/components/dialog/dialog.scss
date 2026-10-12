@@ -1,12 +1,16 @@
 .Dialog-overlay {
-    background: rgba(#121212, 0.2);
+    background: var(--dialog-overlay-color, rgba(#121212, 0.2));
     display: grid;
     place-items: center;
+    transition: background-color 0.25s ease;
 }
 
 .Dialog {
     margin: 15px;
-    background-color: white;
+    background-color: var(--island-bg-color);
+    color: var(--text-primary-color);
     padding: 15px;
-    border-radius: 4px;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-island);
+    transition: background-color 0.25s ease, color 0.25s ease;
 }

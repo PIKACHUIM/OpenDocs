@@ -81,6 +81,22 @@ const enTranslations: Translations = {
   'language.russian': 'Русский',
   'language.arabic': 'عربي',
   'language.vietnamese': 'Tiếng Việt',
+
+  // Appearance
+  'appearance.switcher': 'Appearance',
+  'appearance.light': 'Light',
+  'appearance.dark': 'Dark',
+  'appearance.system': 'System',
+
+  // Theme color
+  'colorTheme.switcher': 'Theme Color',
+  'colorTheme.blue': 'Sky Blue',
+  'colorTheme.violet': 'Violet',
+  'colorTheme.green': 'Fresh Green',
+  'colorTheme.orange': 'Vivid Orange',
+  'colorTheme.pink': 'Sakura Pink',
+  'colorTheme.teal': 'Mint Teal',
+
   // Menu items
   'menu.open': 'Open',
   'menu.saveFile': 'Save to current file',

@@ -74,6 +74,22 @@ const arTranslations: Translations = {
   'language.russian': 'Русский',
   'language.arabic': 'عربي',
   'language.vietnamese': 'Tiếng Việt',
+
+  // Appearance
+  'appearance.switcher': 'المظهر',
+  'appearance.light': 'فاتح',
+  'appearance.dark': 'داكن',
+  'appearance.system': 'حسب النظام',
+
+  // Theme color
+  'colorTheme.switcher': 'لون السمة',
+  'colorTheme.blue': 'أزرق سماوي',
+  'colorTheme.violet': 'بنفسجي',
+  'colorTheme.green': 'أخضر منعش',
+  'colorTheme.orange': 'برتقالي زاهٍ',
+  'colorTheme.pink': 'وردي',
+  'colorTheme.teal': 'أزرق مخضر',
+
   'general.copyToClipboard': 'نسخ إلى الحافظة',
   'general.copyToClipboard.svg': 'SVG',
   'general.copyToClipboard.png': 'PNG',

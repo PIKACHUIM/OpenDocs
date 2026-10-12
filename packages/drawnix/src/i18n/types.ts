@@ -87,6 +87,21 @@ export interface Translations {
   'language.arabic': string;
   'language.vietnamese': string;
 
+  // Appearance (light / dark / system)
+  'appearance.switcher': string;
+  'appearance.light': string;
+  'appearance.dark': string;
+  'appearance.system': string;
+
+  // Theme color (accent color)
+  'colorTheme.switcher': string;
+  'colorTheme.blue': string;
+  'colorTheme.violet': string;
+  'colorTheme.green': string;
+  'colorTheme.orange': string;
+  'colorTheme.pink': string;
+  'colorTheme.teal': string;
+
   // Menu items
   'menu.open': string;
   'menu.saveFile': string;

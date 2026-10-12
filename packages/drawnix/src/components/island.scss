@@ -4,10 +4,10 @@
     box-sizing: border-box;
     background-color: var(--island-bg-color);
     box-shadow: var(--shadow-island);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--border-radius-lg);
     padding: calc(var(--padding) * var(--space-factor));
     position: relative;
-    transition: box-shadow 0.5s ease-in-out;
+    transition: box-shadow 0.25s ease-in-out, background-color 0.25s ease, border-color 0.25s ease;
     border: 1px solid var(--island-border-color);
 
     &.zen-mode {

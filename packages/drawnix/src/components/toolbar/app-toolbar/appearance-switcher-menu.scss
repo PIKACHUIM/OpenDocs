@@ -1,0 +1,47 @@
+.color-theme-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 6px 8px 2px;
+}
+
+.color-theme-swatch {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background-color: var(--swatch-color);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+  &:hover {
+    transform: scale(1.08);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &--active {
+    border-color: var(--island-bg-color);
+    box-shadow: 0 0 0 2px var(--swatch-color), 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+
+  &__check {
+    display: inline-flex;
+    color: #ffffff;
+    width: 14px;
+    height: 14px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}

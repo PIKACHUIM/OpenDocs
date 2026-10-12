@@ -46,6 +46,8 @@ import type { Language } from './i18n/types';
 import { Tutorial } from './components/tutorial';
 import { LASER_POINTER_CLASS_NAME } from './utils/laser-pointer';
 import { Toast, useToast } from './components/toast/toast';
+import { ThemeModeContext, useThemeModeState } from './hooks/use-theme-mode';
+import type { ColorScheme, ColorTheme } from './hooks/use-theme-mode';
 
 export type DrawnixProps = {
   value: PlaitElement[];
@@ -57,6 +59,10 @@ export type DrawnixProps = {
     exportTransparent?: boolean;
   };
   initialLanguage?: Language;
+  /** UI 外观：浅色 / 深色 / 跟随系统，未传入时会自动从 localStorage 恢复 */
+  initialColorScheme?: ColorScheme;
+  /** UI 主题色（品牌强调色），未传入时会自动从 localStorage 恢复 */
+  initialColorTheme?: ColorTheme;
   onChange?: (value: BoardChangeData) => void;
   onSelectionChange?: (selection: Selection | null) => void;
   onValueChange?: (value: PlaitElement[]) => void;
@@ -68,11 +74,17 @@ export type DrawnixProps = {
     exportTransparent: boolean;
   }) => void;
   onLanguageChange?: (language: Language) => void;
+  onColorSchemeChange?: (colorScheme: ColorScheme) => void;
+  onColorThemeChange?: (colorTheme: ColorTheme) => void;
   afterInit?: (board: PlaitBoard) => void;
   tutorial?: boolean;
-} & React.HTMLAttributes<HTMLDivElement>;
+  /** 只读模式：用于分享出去、只允许查看的白板 */
+  readonly?: boolean;
+} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export type { DrawnixToolState } from './hooks/use-drawnix';
+export type { ColorScheme, ColorTheme } from './hooks/use-theme-mode';
+export { useThemeMode, COLOR_THEMES, COLOR_THEME_SWATCHES } from './hooks/use-theme-mode';
 
 const applyToolStateToBoard = (board: PlaitBoard, toolState: DrawnixToolState) => {
   BoardTransforms.updatePointerType(board, toolState.pointer);
@@ -91,6 +103,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   initialToolState,
   initialPreference,
   initialLanguage,
+  initialColorScheme,
+  initialColorTheme,
   onChange,
   onSelectionChange,
   onViewportChange,
@@ -99,15 +113,25 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onToolStateChange,
   onPreferenceChange,
   onLanguageChange,
+  onColorSchemeChange,
+  onColorThemeChange,
   afterInit,
   tutorial = false,
+  readonly = false,
 }) => {
   const options: PlaitBoardOptions = {
-    readonly: false,
+    readonly,
     hideScrollbar: true,
     disabledScrollOnNonFocus: false,
     themeColors: MindThemeColors,
   };
+
+  const themeMode = useThemeModeState({
+    initialColorScheme,
+    initialColorTheme,
+    onColorSchemeChange,
+    onColorThemeChange,
+  });
 
   const [appState, setAppState] = useState<DrawnixState>(() => {
     const md = new MobileDetect(window.navigator.userAgent);
@@ -223,12 +247,15 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         onLanguageChange?.(language);
       }}
     >
+      <ThemeModeContext.Provider value={themeMode}>
       <DrawnixContext.Provider value={{ appState, setAppState, showToast }}>
         <div
           className={classNames('drawnix', {
             'drawnix--mobile': appState.isMobile,
             [`theme--${themeColorMode}`]: themeColorMode,
           })}
+          data-theme={themeMode.resolvedColorScheme}
+          data-color-theme={themeMode.colorTheme}
           ref={containerRef}
         >
           <Wrapper
@@ -272,6 +299,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           <canvas className={`${LASER_POINTER_CLASS_NAME} mouse-course-hidden`}></canvas>
         </div>
       </DrawnixContext.Provider>
+      </ThemeModeContext.Provider>
     </I18nProvider>
   );
 };

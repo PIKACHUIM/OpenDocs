@@ -22,6 +22,7 @@ import {
   Socials,
 } from './app-menu-items';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
+import { AppearanceSwitcherMenu, ColorThemeSwitcherMenu } from './appearance-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
 import { useI18n } from '../../../i18n';
@@ -72,6 +73,9 @@ export const AppToolbar = () => {
               <CleanBoard></CleanBoard>
               <MenuSeparator />
               <LanguageSwitcherMenu />
+              <AppearanceSwitcherMenu />
+              <ColorThemeSwitcherMenu />
+              <MenuSeparator />
               <Socials />
             </Menu>
           </PopoverContent>

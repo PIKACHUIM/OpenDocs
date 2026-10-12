@@ -2,15 +2,7 @@
 
 .drawnix {
   --focus-highlight-color: #a5d8ff;
-  --icon-fill-color: var(--color-on-surface);
-  --island-bg-color: #ffffff;
-  --island-border-color: #eeeeee;
   --keybinding-color: var(--color-gray-40);
-  --shadow-island: 0 0 16px #00000014;
-  --dialog-border-color: var(--color-gray-20);
-  --button-hover-bg: var(--color-surface-high);
-  --button-active-border: var(--color-brand-active);
-  --link-color: var(--color-primary);
   --default-button-size: 2rem;
   --default-icon-size: 1rem;
   --lg-button-size: 2.25rem;
@@ -37,22 +29,22 @@
   --dx-radius-3: 6px;
   --dx-radius-4: 8px;
   --dx-radius-full: 9999px;
-  --text-primary-color: var(--color-on-surface);
+
+  --border-radius-sm: 0.3rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
 
   --color-icon-white: #ffffff;
 
-  --color-primary: #6698ff;
-  --color-primary-darker: #4a7ee6;    // 降低亮度和饱和度
-  --color-primary-darkest: #3366cc;   // 进一步降低亮度
-  --color-primary-light: #e6f0ff;     // 提高亮度，降低饱和度
-  --color-primary-light-darker: #cce0ff;  // light 的稍暗版本
-  --color-primary-hover: #80acff;     // 略微提高亮度的互动状态
-
-  --button-hover-bg: var(--color-surface-high);
-  --button-active-bg: var(--color-surface-high);
-  --button-active-border: var(--color-brand-active);
-  --default-border-color: var(--color-surface-high);
-
+  /*
+   * Fixed neutral ramp used by the canvas drawing theme
+   * (ThemeColorMode: default/colorful/soft/retro/dark/starry, driven by the
+   * `.theme--xxx` classes in theme-toolbar.tsx). These values are
+   * intentionally NOT re-mapped by the `[data-theme='dark']` UI appearance
+   * switch below — the two concepts are independent, see
+   * `hooks/use-theme-mode.tsx` for the UI appearance system and
+   * `toast.scss` / `ttd-dialog.scss` for places that rely on the fixed ramp.
+   */
   --color-gray-10: #f5f5f5;
   --color-gray-20: #ebebeb;
   --color-gray-30: #d6d6d6;
@@ -65,26 +57,151 @@
   --color-gray-90: #1e1e1e;
   --color-gray-100: #121212;
 
-  --color-disabled: var(--color-gray-40);
-
-  --color-promo: var(--color-primary);
   --color-success: #268029;
   --color-success-lighter: #cafccc;
 
-  --border-radius-sm: 0.25rem;
-  --border-radius-md: 0.375rem;
-  --border-radius-lg: 0.5rem;
+  /* ===================================================================
+   * Accent / brand color — overridable per `[data-color-theme]`.
+   * Everything downstream (selected tool highlight, active menu item,
+   * links, radio-group, focus rings…) derives from these few tokens.
+   * =================================================================== */
+  --color-primary-rgb: 102, 152, 255;
+  --color-primary: #6698ff;
+  --color-primary-darker: #4a7ee6;
+  --color-primary-darkest: #3366cc;
+  --color-primary-light: #e6f0ff;
+  --color-primary-light-darker: #cce0ff;
+  --color-primary-hover: #80acff;
+
+  --color-promo: var(--color-primary);
+  --color-brand-hover: var(--color-primary);
+  --color-brand-active: var(--color-primary);
+  --color-on-primary-container: var(--color-primary);
+  --color-surface-primary-container: rgba(var(--color-primary-rgb), 0.1);
+  --link-color: var(--color-primary);
+
+  /* ===================================================================
+   * UI appearance (light by default) — overridden under
+   * `[data-theme='dark']` further below. These drive almost every
+   * island / menu / dialog / toast background & text color in the app.
+   * =================================================================== */
+  --island-bg-color: #ffffff;
+  --island-border-color: #eeeeee;
+  --shadow-island: 0 2px 20px rgba(26, 29, 41, 0.08), 0 0 0 1px rgba(26, 29, 41, 0.03);
+  --dialog-border-color: var(--color-gray-20);
+  --dialog-overlay-color: rgba(23, 23, 28, 0.32);
+  --button-hover-bg: var(--color-surface-high);
+  --button-active-bg: var(--color-surface-high);
+  --button-active-border: var(--color-brand-active);
+  --default-border-color: var(--color-surface-high);
+  --color-disabled: var(--color-gray-40);
+
   --color-surface-high: hsl(220, 100%, 97%);
   --color-surface-mid: hsl(220 25% 96%);
   --color-surface-low: hsl(220 25% 94%);
   --color-surface-lowest: #ffffff;
   --color-on-surface: #666666;
-  --color-brand-hover: #6698ff;
-  --color-on-primary-container: #6698ff;
-  --color-surface-primary-container: rgba(102, 152, 255, .1);
-  --color-brand-active: #6698ff;
   --color-border-outline: #767680;
   --color-border-outline-variant: #c5c5d0;
 
-  --default-border-color: var(--color-surface-high);
+  /* Semantic text tokens (used by select.scss, settings panel, dialogs…) */
+  --text-primary-color: var(--color-gray-100);
+  --color-text-primary: var(--text-primary-color);
+  --color-text-secondary: var(--color-on-surface);
+  --color-text-disabled: var(--color-gray-40);
+  --color-bg-disabled: var(--color-gray-10);
+  --icon-fill-color: var(--color-on-surface);
+
+  --scrollbar-thumb-color: var(--color-gray-30);
+  --scrollbar-thumb-hover-color: var(--color-gray-40);
+
+  /* Smooth cross-fade whenever appearance / color theme is switched */
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  color-scheme: light;
+}
+
+/* ===================== Theme color presets ===================== */
+.drawnix[data-color-theme='violet'] {
+  --color-primary-rgb: 139, 92, 246;
+  --color-primary: #8b5cf6;
+  --color-primary-darker: #7c3aed;
+  --color-primary-darkest: #6d28d9;
+  --color-primary-light: #ede9fe;
+  --color-primary-light-darker: #ddd6fe;
+  --color-primary-hover: #a78bfa;
+}
+
+.drawnix[data-color-theme='green'] {
+  --color-primary-rgb: 34, 197, 94;
+  --color-primary: #22c55e;
+  --color-primary-darker: #16a34a;
+  --color-primary-darkest: #15803d;
+  --color-primary-light: #dcfce7;
+  --color-primary-light-darker: #bbf7d0;
+  --color-primary-hover: #4ade80;
+}
+
+.drawnix[data-color-theme='orange'] {
+  --color-primary-rgb: 249, 115, 22;
+  --color-primary: #f97316;
+  --color-primary-darker: #ea580c;
+  --color-primary-darkest: #c2410c;
+  --color-primary-light: #ffedd5;
+  --color-primary-light-darker: #fed7aa;
+  --color-primary-hover: #fb923c;
+}
+
+.drawnix[data-color-theme='pink'] {
+  --color-primary-rgb: 236, 72, 153;
+  --color-primary: #ec4899;
+  --color-primary-darker: #db2777;
+  --color-primary-darkest: #be185d;
+  --color-primary-light: #fce7f3;
+  --color-primary-light-darker: #fbcfe8;
+  --color-primary-hover: #f472b6;
+}
+
+.drawnix[data-color-theme='teal'] {
+  --color-primary-rgb: 20, 184, 166;
+  --color-primary: #14b8a6;
+  --color-primary-darker: #0d9488;
+  --color-primary-darkest: #0f766e;
+  --color-primary-light: #ccfbf1;
+  --color-primary-light-darker: #99f6e4;
+  --color-primary-hover: #2dd4bf;
+}
+
+/* ===================== Dark appearance ===================== */
+.drawnix[data-theme='dark'] {
+  --island-bg-color: #232329;
+  --island-border-color: #35353d;
+  --shadow-island: 0 6px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --dialog-border-color: #3a3a43;
+  --dialog-overlay-color: rgba(8, 8, 12, 0.6);
+  --button-hover-bg: #2d2d35;
+  --button-active-bg: #34343d;
+  --default-border-color: #3a3a43;
+  --color-disabled: #55555f;
+
+  --color-surface-high: #2a2a32;
+  --color-surface-mid: #232329;
+  --color-surface-low: #1b1b20;
+  --color-surface-lowest: #18181c;
+  --color-on-surface: #a7a7b3;
+  --color-border-outline: #8a8a95;
+  --color-border-outline-variant: #45454e;
+
+  --text-primary-color: #eeeef2;
+  --color-text-primary: var(--text-primary-color);
+  --color-text-secondary: var(--color-on-surface);
+  --color-text-disabled: #55555f;
+  --color-bg-disabled: #2a2a32;
+  --icon-fill-color: #c7c7d1;
+
+  --color-surface-primary-container: rgba(var(--color-primary-rgb), 0.24);
+
+  --scrollbar-thumb-color: #45454e;
+  --scrollbar-thumb-hover-color: #58585f;
+
+  color-scheme: dark;
 }

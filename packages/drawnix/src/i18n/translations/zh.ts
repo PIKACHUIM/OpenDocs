@@ -83,6 +83,22 @@ const zhTranslations: Translations = {
   'language.russian': 'Русский',
   'language.arabic': 'عربي',
   'language.vietnamese': 'Tiếng Việt',
+
+  // Appearance
+  'appearance.switcher': '外观',
+  'appearance.light': '浅色',
+  'appearance.dark': '深色',
+  'appearance.system': '跟随系统',
+
+  // Theme color
+  'colorTheme.switcher': '主题色',
+  'colorTheme.blue': '天空蓝',
+  'colorTheme.violet': '薰衣紫',
+  'colorTheme.green': '清新绿',
+  'colorTheme.orange': '活力橙',
+  'colorTheme.pink': '樱花粉',
+  'colorTheme.teal': '薄荷青',
+
   // Menu items
   'menu.open': '打开',
   'menu.saveFile': '保存到当前文件',

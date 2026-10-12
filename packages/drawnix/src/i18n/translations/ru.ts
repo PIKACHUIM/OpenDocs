@@ -83,6 +83,21 @@ const ruTranslations: Translations = {
   'language.arabic': 'عربي',
   'language.vietnamese': 'Tiếng Việt',
 
+  // Appearance
+  'appearance.switcher': 'Оформление',
+  'appearance.light': 'Светлая',
+  'appearance.dark': 'Тёмная',
+  'appearance.system': 'Системная',
+
+  // Theme color
+  'colorTheme.switcher': 'Цвет темы',
+  'colorTheme.blue': 'Небесный синий',
+  'colorTheme.violet': 'Фиолетовый',
+  'colorTheme.green': 'Свежий зелёный',
+  'colorTheme.orange': 'Яркий оранжевый',
+  'colorTheme.pink': 'Розовый',
+  'colorTheme.teal': 'Мятный',
+
   // Menu items
   'menu.open': 'Открыть',
   'menu.saveFile': 'Сохранить в текущий файл',

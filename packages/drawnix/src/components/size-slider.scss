@@ -38,7 +38,7 @@
     height: 12px;
     border: 2px solid var(--color-primary);
     border-radius: 50%;
-    background-color: #ffffff;
+    background-color: var(--island-bg-color);
     transform: translate(-50%, -50%);
     cursor: grab;
     box-shadow: 0 2px 4px rgba(#000000, 0.1);
@@ -46,7 +46,7 @@
 
   .slider-track:focus-visible .slider-thumb {
     box-shadow:
-      0 0 0 3px rgba(#4dabf7, 0.25),
+      0 0 0 3px rgba(var(--color-primary-rgb), 0.25),
       0 2px 4px rgba(#000000, 0.1);
   }
 
@@ -76,7 +76,7 @@
 
     .slider-track:focus-visible .slider-thumb {
       box-shadow:
-        0 0 0 3px rgba(#4dabf7, 0.25),
+        0 0 0 3px rgba(var(--color-primary-rgb), 0.25),
         0 4px 10px rgba(#000000, 0.14);
     }
   }
