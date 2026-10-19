@@ -193,7 +193,7 @@ const arTranslations: Translations = {
   'mind.centralText': 'الموضوع المركزي',
   'mind.abstractNodeText': 'ملخص',
 
-  'tutorial.title': 'Drawnix',
+  'tutorial.title': 'OpenDocs',
   'tutorial.description':
     'سبورة شاملة تتضمن الخرائط الذهنية والمخططات الانسيابية والرسم الحر وغير ذلك',
   'tutorial.dataDescription': 'تُحفظ جميع البيانات محليًا في متصفحك',

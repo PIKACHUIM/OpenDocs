@@ -193,7 +193,7 @@ const ruTranslations: Translations = {
   'mind.centralText': 'Центральная тема',
   'mind.abstractNodeText': 'Резюме',
 
-  'tutorial.title': 'Drawnix',
+  'tutorial.title': 'OpenDocs',
   'tutorial.description':
     'Универсальная доска: майнд-карты, блок-схемы, свободное рисование и многое другое',
   'tutorial.dataDescription': 'Все данные хранятся локально в вашем браузере',

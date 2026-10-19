@@ -165,6 +165,22 @@ npm run test:api
 npm run build:web
 ```
 
+## 致谢
+
+OpenDocs 的形态与部分实现思路来自这些优秀的开源项目，界面上已统一为 OpenDocs 品牌，
+在此一并致谢（排名不分先后）：
+
+| 项目 | 在本项目中的角色 | 链接 |
+| --- | --- | --- |
+| Drawnix | 白板内核（`packages/drawnix`），无限画布与思维导图能力 | https://github.com/plait-board/drawnix |
+| Univer | 表格编辑引擎（公式、数字格式、多工作表） | https://github.com/dream-num/univer |
+| PPTist | 演示文稿编辑器的交互与功能参考 | https://github.com/pipipi-pikachu/PPTist |
+| OpenPPT | 演示文稿自由画布的产品形态参考 | https://github.com/YOOTeam/OpenPPT |
+| poster-design | 图片/海报编辑器的信息架构与交互参考 | https://github.com/palxiao/poster-design |
+
+> 说明：以上项目仅作为实现参考或底层依赖，OpenDocs 的界面、品牌与交互统一由本项目维护；
+> 各自代码的版权与许可归原作者所有。
+
 ## 许可
 
 [MIT](LICENSE)。白板内核 Drawnix 同样以 MIT 发布，版权归其原作者所有。

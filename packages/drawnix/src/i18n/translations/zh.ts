@@ -193,7 +193,7 @@ const zhTranslations: Translations = {
 
   #### 哇 是个程序员 🤯 ⌨️ 💡 👩 💻`,
 
-  'tutorial.title': 'Drawnix',
+  'tutorial.title': 'OpenDocs',
   'tutorial.description': 'All-in-one 白板，包含思维导图、流程图、自由画笔等',
   'tutorial.dataDescription': '所有数据被存在你的浏览器本地',
   'tutorial.appToolbar': '导出，语言设置，...',

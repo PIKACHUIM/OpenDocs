@@ -192,7 +192,7 @@ const viTranslations: Translations = {
   'mind.centralText': 'Chủ đề trung tâm',
   'mind.abstractNodeText': 'Tóm tắt',
 
-  'tutorial.title': 'DPIT Draw MindMap',
+  'tutorial.title': 'OpenDocs',
   'tutorial.description':
     'Bảng trắng tất cả trong một, bao gồm sơ đồ tư duy, lưu đồ, vẽ tự do và hơn thế nữa',
   'tutorial.dataDescription': 'Tất cả dữ liệu được lưu trữ cục bộ trong trình duyệt của bạn',

@@ -191,7 +191,7 @@ const enTranslations: Translations = {
   'mind.centralText': 'Central Topic',
   'mind.abstractNodeText': 'Summary',
 
-  'tutorial.title': 'Drawnix',
+  'tutorial.title': 'OpenDocs',
   'tutorial.description':
     'All-in-one whiteboard, including mind maps, flowcharts, free drawing, and more',
   'tutorial.dataDescription': 'All data is stored locally in your browser',
