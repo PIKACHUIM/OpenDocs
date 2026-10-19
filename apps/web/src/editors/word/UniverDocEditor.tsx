@@ -32,7 +32,10 @@ export function UniverDocEditor({ content, canWrite, onChange }: WordEditorProps
         [LocaleType.ZH_CN]: merge({}, zhCN),
         [LocaleType.EN_US]: merge({}, enUS),
       },
-      presets: [UniverDocsCorePreset({ container: host, header: false, footer: false })],
+      // 同 Excel：header 里含菜单与工具栏，不能关；品牌用 CSS 处理
+      presets: [
+        UniverDocsCorePreset({ container: host, header: true, toolbar: true, footer: true }),
+      ],
     });
 
     const snapshot = contentRef.current.univer as Partial<IDocumentData> | undefined;

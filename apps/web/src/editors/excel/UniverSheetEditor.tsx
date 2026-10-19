@@ -34,9 +34,16 @@ export function UniverSheetEditor({ content, canWrite, onChange }: ExcelEditorPr
         [LocaleType.ZH_CN]: merge({}, zhCN),
         [LocaleType.EN_US]: merge({}, enUS),
       },
-      // header/footer 关掉：去掉 Univer 自带的顶部品牌栏与底部状态栏，
-      // 外壳统一由 OpenDocs 的 DocumentShell 提供
-      presets: [UniverSheetsCorePreset({ container: host, header: false, footer: false })],
+      // 必须保留 header/toolbar：Univer 的菜单与工具栏都挂在 header 里，
+      // 之前为了「去品牌」把 header 关掉，导致工具栏整体消失（功能倒退）。
+      // 品牌统一改用 CSS 隐藏 logo，不动功能区域。
+      presets: [
+        UniverSheetsCorePreset({
+          container: host,
+          header: true,
+          toolbar: true,
+        }),
+      ],
     });
 
     const snapshot = contentRef.current.univer as Partial<IWorkbookData> | undefined;
