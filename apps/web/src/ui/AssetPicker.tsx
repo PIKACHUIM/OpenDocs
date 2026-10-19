@@ -63,20 +63,52 @@ export function AssetPicker({ open, onClose, onSelect, documentId, shareToken }:
     <Modal open={open} title="素材库" onClose={onClose}>
       <div className={styles.row} style={{ justifyContent: 'space-between', marginBottom: 14 }}>
         <span className={styles.hint}>上传一次，图片编辑器与演示文稿都能复用。</span>
-        <label className={`${styles.button} ${styles.buttonPrimary}`} style={{ cursor: 'pointer' }}>
-          {uploading ? '上传中…' : '上传图片'}
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            disabled={uploading}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void upload(file);
-              event.target.value = '';
-            }}
-          />
-        </label>
+        <div className={styles.row}>
+          {/* 未登录或素材接口不可用时，仍可用本地图片，避免编辑功能完全不可用 */}
+          <label
+            className={styles.button}
+            style={{ cursor: 'pointer' }}
+            title="不经过服务器，仅插入当前文档"
+          >
+            本地图片
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    onSelect({
+                      id: `local_${Date.now()}`,
+                      url: String(reader.result),
+                      contentType: file.type,
+                      sizeBytes: file.size,
+                    });
+                    onClose();
+                  };
+                  reader.readAsDataURL(file);
+                }
+                event.target.value = '';
+              }}
+            />
+          </label>
+          <label className={`${styles.button} ${styles.buttonPrimary}`} style={{ cursor: 'pointer' }}>
+            {uploading ? '上传中…' : '上传到素材库'}
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = '';
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {error ? <div className={styles.error}>{error}</div> : null}

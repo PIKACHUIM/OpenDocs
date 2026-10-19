@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   createId,
   SLIDE_HEIGHT,
@@ -150,7 +150,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [canWrite, selectedId]);
 
   const updateSlides = (next: PptSlide[]) => onChange({ ...content, slides: next });
 
@@ -315,11 +315,16 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     (event.target as HTMLElement).setPointerCapture(event.pointerId);
   };
 
-  const onPointerMove = (event: React.PointerEvent) => {
+  // 拖拽用 rAF 节流：pointermove 频率可达 120Hz，每次都推一次内容
+  // 会让整个幻灯片栏跟着重渲染，表现就是拖动时卡住。
+  const rafRef = useRef<number | null>(null);
+  const latestPointerRef = useRef<{ x: number; y: number } | null>(null);
+
+  const applyPointerMove = (clientX: number, clientY: number) => {
     const drag = dragRef.current;
     if (!drag) return;
-    const dx = (event.clientX - drag.startX) / scale;
-    const dy = (event.clientY - drag.startY) / scale;
+    const dx = (clientX - drag.startX) / scale;
+    const dy = (clientY - drag.startY) / scale;
     if (drag.mode === 'move') {
       patchElement(drag.id, {
         x: Math.round(drag.origin.x + dx),
@@ -333,8 +338,22 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     }
   };
 
+  const onPointerMove = (event: React.PointerEvent) => {
+    latestPointerRef.current = { x: event.clientX, y: event.clientY };
+    if (rafRef.current !== null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      const point = latestPointerRef.current;
+      if (point) applyPointerMove(point.x, point.y);
+    });
+  };
+
   const onPointerUp = () => {
     dragRef.current = null;
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   };
 
   const selected = elements.find((item) => item.id === selectedId) ?? null;
@@ -400,7 +419,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           >
             <span className={styles.railIndex}>{index + 1}</span>
             <div className={styles.railThumb} style={{ background: item.background ?? '#fff' }}>
-              <SlidePreview slide={item} />
+              <MemoSlidePreview slide={item} />
             </div>
           </button>
         ))}
@@ -729,7 +748,9 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   );
 }
 
-/** 缩略图：用与原画布相同的比例渲染 */
+/** 缩略图：用与原画布相同的比例渲染。memo 避免拖动某个元素时全部缩略图重渲染 */
+const MemoSlidePreview = memo(SlidePreview);
+
 function SlidePreview({ slide }: { slide: PptSlide }) {
   const elements = slide.elements ?? [];
   return (

@@ -48,10 +48,14 @@ export function UniverDocEditor({ content, canWrite, onChange }: WordEditorProps
       editable.setEditable(false);
     }
 
-    // FDocument 没有 onCommandExecuted，这里用「定时比对快照」的方式感知变更：
-    // 序列化结果与上次不同才向上推送，避免无意义的自动保存请求。
+    // FDocument 没有命令事件，也不适合高频轮询快照（save() 每次都要遍历整篇文档，
+    // 1.2s 一次的序列化会把主线程压满，表现为输入卡顿甚至卡死）。
+    // 这里改为「用户输入事件后防抖保存 + 5s 兜底轮询」：打字时不产生额外开销，
+    // 停手 1s 才真正取一次快照。
     let lastSnapshot = JSON.stringify(snapshot ?? null);
-    const timer = window.setInterval(() => {
+    let debounce: number | null = null;
+
+    const flush = () => {
       try {
         const next = document.save();
         const serialized = JSON.stringify(next);
@@ -59,17 +63,28 @@ export function UniverDocEditor({ content, canWrite, onChange }: WordEditorProps
         lastSnapshot = serialized;
         onChangeRef.current({ ...contentRef.current, univer: next });
       } catch {
-        // 编辑器尚在初始化或已销毁时忽略
+        // 初始化未完成或已销毁时忽略
       }
-    }, 1200);
+    };
+
+    const schedule = () => {
+      if (debounce) window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => {
+        debounce = null;
+        flush();
+      }, 1000);
+    };
+
+    const events: Array<keyof HTMLElementEventMap> = ['keyup', 'input', 'paste', 'cut'];
+    for (const name of events) host.addEventListener(name, schedule, true);
+    const fallback = window.setInterval(flush, 5000);
 
     return () => {
-      window.clearInterval(timer);
+      for (const name of events) host.removeEventListener(name, schedule, true);
+      if (debounce) window.clearTimeout(debounce);
+      window.clearInterval(fallback);
       try {
-        const final = document.save();
-        if (JSON.stringify(final) !== lastSnapshot) {
-          onChangeRef.current({ ...contentRef.current, univer: final });
-        }
+        flush();
         univer.dispose();
       } catch {
         // 卸载竞态下 Univer 可能抛错，忽略

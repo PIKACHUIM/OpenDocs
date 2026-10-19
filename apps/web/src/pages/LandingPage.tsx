@@ -2,66 +2,92 @@ import { useState } from 'react';
 import { ApiError, documentApi, emptyContentFor, type DocumentType } from '../api';
 import { useAuth } from '../lib/auth';
 import { navigate, type TryType } from '../lib/router';
-import { LocalBoard } from './LocalBoard';
+import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
-type Tab = 'board' | 'word' | 'excel' | 'markdown' | 'image';
+interface Entry {
+  type: DocumentType | 'image';
+  title: string;
+  desc: string;
+  badge: string;
+  fg: string;
+  bg: string;
+}
 
-const TABS: Array<{ key: Tab; label: string }> = [
-  { key: 'board', label: '在线白板' },
-  { key: 'word', label: 'Word 文档' },
-  { key: 'excel', label: 'Excel 表格' },
-  { key: 'markdown', label: 'Markdown' },
-  { key: 'image', label: '图片编辑' },
-];
-
-const INTRO: Record<Exclude<Tab, 'board'>, { type: DocumentType; title: string; desc: string }> = {
-  word: {
+const ENTRIES: Entry[] = [
+  {
+    type: 'mindmap',
+    title: '在线白板',
+    desc: '无限画布，把想法随手铺开再慢慢收敛',
+    badge: '板',
+    fg: '#3370ff',
+    bg: '#eef3ff',
+  },
+  {
     type: 'word',
     title: 'Word 文档',
-    desc: '标题、列表、引用、表格、图片，还能把思维导图直接嵌进正文。',
+    desc: '标题、列表、表格、图片，排版接近 Word',
+    badge: 'W',
+    fg: '#1a56c4',
+    bg: '#eaf1fe',
   },
-  excel: {
+  {
     type: 'excel',
     title: 'Excel 表格',
-    desc: '公式、数字格式、多工作表，基于 Univer 的完整表格引擎。',
+    desc: '公式、数字格式与多工作表',
+    badge: 'X',
+    fg: '#0f7b45',
+    bg: '#e9f7ef',
   },
-  markdown: {
+  {
+    type: 'ppt',
+    title: '演示文稿',
+    desc: '自由画布排版幻灯片，可放映与导出 pptx',
+    badge: 'P',
+    fg: '#c2500f',
+    bg: '#fdf0e8',
+  },
+  {
     type: 'markdown',
     title: 'Markdown',
-    desc: '源码编辑与实时预览，适合技术文档与长文写作。',
+    desc: '源码编辑与实时预览，适合技术文档',
+    badge: 'MD',
+    fg: '#6f4bd8',
+    bg: '#f3efff',
   },
-  image: {
-    type: 'markdown',
+  {
+    type: 'image',
     title: '图片编辑',
-    desc: '封面、引用、清单模板，图层化编辑并导出 PNG。',
+    desc: '模板、图层、对齐与 PNG 导出',
+    badge: '图',
+    fg: '#b5487a',
+    bg: '#fdeff5',
   },
-};
+];
 
 /**
- * 首页：以「在线白板」为默认标签页的工作台。
- *
- * 结构与管理后台一致：顶栏 + 横向 tab + 内容区。
- * 白板 tab 直接内嵌编辑器，其他类型放在独立 tab 里，点击即可新建或试用。
+ * 门户首页：介绍 + 各编辑器入口。
+ * 顶栏与文档中心、管理后台共用 TopBar，保证三处样式一致。
  */
 export function LandingPage() {
-  const { user, config, loading } = useAuth();
-  const [tab, setTab] = useState<Tab>('board');
+  const { user, loading } = useAuth();
   const [busy, setBusy] = useState(false);
 
-  const siteName = config?.siteName ?? 'OpenDocs';
-
-  const startDocument = async (type: DocumentType) => {
+  const start = async (entry: Entry) => {
+    if (entry.type === 'image') {
+      navigate('/image');
+      return;
+    }
     if (!user) {
-      navigate(`/try/${type as TryType}`);
+      navigate(`/try/${entry.type as TryType}`);
       return;
     }
     setBusy(true);
     try {
       const data = await documentApi.create({
-        type,
-        title: '未命名文档',
-        content: emptyContentFor(type),
+        type: entry.type,
+        title: entry.title === '在线白板' ? '未命名白板' : `未命名${entry.title}`,
+        content: emptyContentFor(entry.type),
       });
       navigate(`/d/${data.document.id}`);
     } catch (error) {
@@ -72,102 +98,58 @@ export function LandingPage() {
   };
 
   return (
-    <div className={styles.workspaceShell}>
-      <header className={styles.landingHeader}>
-        <span className={styles.landingBrand} onClick={() => setTab('board')}>
-          {siteName}
-        </span>
-        <nav className={styles.landingNav}>
-          <button type="button" className={styles.landingNavItem} onClick={() => navigate('/documents')}>
-            我的文档
-          </button>
-          {user ? (
-            <button type="button" className={styles.landingNavItem} onClick={() => navigate('/admin')}>
-              管理后台
-            </button>
-          ) : null}
-        </nav>
-        <span className={styles.grow} />
-        {loading ? null : user ? (
+    <div className={styles.page}>
+      <TopBar />
+
+      <section className={styles.hero}>
+        <span className={styles.heroEyebrow}>免登录即可试用</span>
+        <h1 className={styles.heroTitle}>从想法到交付，都在一份文档里完成</h1>
+        <p className={styles.heroSub}>
+          白板、文档、表格、演示与图片编辑共用一套账号、目录与分享体系。
+          先试用，觉得顺手再保存到云端。
+        </p>
+        <div className={styles.heroActions}>
           <button
             type="button"
-            className={`${styles.button} ${styles.buttonPrimary}`}
-            onClick={() => navigate('/documents')}
+            className={styles.heroPrimary}
+            disabled={busy || loading}
+            onClick={() => navigate(user ? '/documents' : '/register')}
           >
-            进入工作台
+            {user ? '进入工作台' : '免费开始使用'}
           </button>
-        ) : (
-          <>
-            <button type="button" className={styles.button} onClick={() => navigate('/login')}>
-              登录
-            </button>
-            <button
-              type="button"
-              className={`${styles.button} ${styles.buttonPrimary}`}
-              onClick={() => navigate('/register')}
-            >
-              免费注册
-            </button>
-          </>
-        )}
-      </header>
+          <button type="button" className={styles.heroSecondary} onClick={() => navigate('/local')}>
+            打开在线白板
+          </button>
+        </div>
+      </section>
 
-      <div className={styles.workspaceBody}>
-        <div className={styles.tabs}>
-          {TABS.map((item) => (
+      <section className={styles.entrySection}>
+        <div className={styles.entryGrid}>
+          {ENTRIES.map((entry) => (
             <button
-              key={item.key}
+              key={entry.title}
               type="button"
-              className={`${styles.tab} ${tab === item.key ? styles.tabActive : ''}`}
-              onClick={() => setTab(item.key)}
+              className={styles.entryCard}
+              disabled={busy}
+              onClick={() => void start(entry)}
             >
-              {item.label}
+              <span
+                className={styles.entryIcon}
+                style={{ color: entry.fg, background: entry.bg }}
+                aria-hidden
+              >
+                {entry.badge}
+              </span>
+              <div className={styles.entryTitle}>{entry.title}</div>
+              <div className={styles.entryDesc}>{entry.desc}</div>
             </button>
           ))}
         </div>
+      </section>
 
-        <div className={styles.workspacePanel}>
-          {tab === 'board' ? (
-            <LocalBoard />
-          ) : (
-            <div className={styles.panelEmpty}>
-              <h2 className={styles.panelTitle}>{INTRO[tab].title}</h2>
-              <p className={styles.panelDesc}>{INTRO[tab].desc}</p>
-              <div className={styles.row} style={{ justifyContent: 'center', marginTop: 18 }}>
-                {tab === 'image' ? (
-                  <button
-                    type="button"
-                    className={`${styles.button} ${styles.buttonPrimary}`}
-                    onClick={() => navigate('/image')}
-                  >
-                    打开图片编辑
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className={`${styles.button} ${styles.buttonPrimary}`}
-                      disabled={busy}
-                      onClick={() => void startDocument(INTRO[tab].type)}
-                    >
-                      {user ? '新建文档' : '免登录试用'}
-                    </button>
-                    {user ? (
-                      <button
-                        type="button"
-                        className={styles.button}
-                        onClick={() => navigate('/documents')}
-                      >
-                        我的文档
-                      </button>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <footer className={styles.landingFooter}>
+        免登录试用模式下，内容只保存在当前浏览器；登录后才会同步到云端。
+      </footer>
     </div>
   );
 }
