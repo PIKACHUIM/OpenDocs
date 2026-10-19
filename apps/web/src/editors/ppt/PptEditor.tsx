@@ -152,17 +152,55 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     return () => window.removeEventListener('keydown', onKey);
   }, [canWrite, selectedId]);
 
-  const updateSlides = (next: PptSlide[]) => onChange({ ...content, slides: next });
+  // 撤销 / 重做：只在「结构性操作」时记录快照，拖拽过程不记录
+  const historyRef = useRef<PptSlide[][]>([]);
+  const futureRef = useRef<PptSlide[][]>([]);
+  const [, forceRender] = useState(0);
 
-  const patchSlide = (index: number, patch: Partial<PptSlide>) =>
-    updateSlides(slides.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const pushHistory = () => {
+    historyRef.current.push(slides);
+    if (historyRef.current.length > 60) historyRef.current.shift();
+    futureRef.current = [];
+  };
 
-  const patchElement = (id: string, patch: Partial<SlideElement>) => {
-    patchSlide(active, {
-      elements: elements.map((item) =>
-        item.id === id ? ({ ...item, ...patch } as SlideElement) : item
-      ),
-    });
+  const updateSlides = (next: PptSlide[], record = true) => {
+    if (record) pushHistory();
+    onChange({ ...content, slides: next });
+    forceRender((value) => value + 1);
+  };
+
+  const undo = () => {
+    const previous = historyRef.current.pop();
+    if (!previous) return;
+    futureRef.current.push(slides);
+    onChange({ ...content, slides: previous });
+    forceRender((value) => value + 1);
+  };
+
+  const redo = () => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    historyRef.current.push(slides);
+    onChange({ ...content, slides: next });
+    forceRender((value) => value + 1);
+  };
+
+  const patchSlide = (index: number, patch: Partial<PptSlide>, record = true) =>
+    updateSlides(
+      slides.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+      record
+    );
+
+  const patchElement = (id: string, patch: Partial<SlideElement>, record = true) => {
+    patchSlide(
+      active,
+      {
+        elements: elements.map((item) =>
+          item.id === id ? ({ ...item, ...patch } as SlideElement) : item
+        ),
+      },
+      record
+    );
   };
 
   const addElement = (element: SlideElement) => {
@@ -305,6 +343,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     if (!canWrite) return;
     event.stopPropagation();
     setSelectedId(element.id);
+    pushHistory();
     dragRef.current = {
       id: element.id,
       mode,
@@ -326,15 +365,17 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     const dx = (clientX - drag.startX) / scale;
     const dy = (clientY - drag.startY) / scale;
     if (drag.mode === 'move') {
-      patchElement(drag.id, {
-        x: Math.round(drag.origin.x + dx),
-        y: Math.round(drag.origin.y + dy),
-      });
+      patchElement(
+        drag.id,
+        { x: Math.round(drag.origin.x + dx), y: Math.round(drag.origin.y + dy) },
+        false
+      );
     } else {
-      patchElement(drag.id, {
-        w: Math.max(40, Math.round(drag.origin.w + dx)),
-        h: Math.max(30, Math.round(drag.origin.h + dy)),
-      });
+      patchElement(
+        drag.id,
+        { w: Math.max(40, Math.round(drag.origin.w + dx)), h: Math.max(30, Math.round(drag.origin.h + dy)) },
+        false
+      );
     }
   };
 
@@ -406,6 +447,131 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   return (
     <div className={styles.wrap}>
+      <div className={styles.topbar}>
+        <div className={styles.topbarGroup}>
+          <button type="button" className={styles.topbarButton} disabled={!canWrite} onClick={addText}>
+            文本
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('rect')}
+          >
+            矩形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('ellipse')}
+          >
+            圆形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => setPickerOpen(true)}
+          >
+            图片
+          </button>
+        </div>
+
+        <span className={styles.topbarDivider} />
+
+        <div className={styles.topbarGroup}>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && moveElement(selected.id, 1)}
+          >
+            上移一层
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && moveElement(selected.id, -1)}
+          >
+            下移一层
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && duplicateElement(selected.id)}
+          >
+            复制
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && removeElement(selected.id)}
+          >
+            删除
+          </button>
+        </div>
+
+        <span className={styles.topbarDivider} />
+
+        <div className={styles.topbarGroup}>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && alignElement(selected.id, 'centerX')}
+          >
+            水平居中
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite || !selected}
+            onClick={() => selected && alignElement(selected.id, 'middle')}
+          >
+            垂直居中
+          </button>
+        </div>
+
+        <span className={styles.topbarDivider} />
+
+        <div className={styles.topbarGroup}>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={historyRef.current.length === 0}
+            onClick={undo}
+          >
+            撤销
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={futureRef.current.length === 0}
+            onClick={redo}
+          >
+            重做
+          </button>
+        </div>
+
+        <span style={{ flex: 1 }} />
+
+        <button
+          type="button"
+          className={styles.topbarButton}
+          onClick={() => {
+            setPresentIndex(active);
+            setPresenting(true);
+          }}
+        >
+          放映
+        </button>
+      </div>
+
+      <div className={styles.body}>
       <div className={styles.rail}>
         {slides.map((item, index) => (
           <button
@@ -690,6 +856,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           ) : null}
         </div>
       </aside>
+      </div>
 
       {presenting ? (
         <div

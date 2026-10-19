@@ -58,3 +58,6 @@ wrangler.test.jsonc
 # VitePress 文档站产物与缓存
 /docs/.vitepress/dist
 /docs/.vitepress/cache
+
+# 参考项目源码（仅本地对照，不进入版本库）
+/references

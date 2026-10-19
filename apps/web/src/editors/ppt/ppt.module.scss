@@ -7,9 +7,69 @@ $bg: #f2f3f5;
 
 .wrap {
   display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   background: $bg;
+}
+
+// 顶部工具条（对齐 OpenPPT：插入 / 排列 / 撤销 都在这一行）
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-bottom: 1px solid $border;
+  background: $surface;
+  flex-shrink: 0;
+}
+
+.topbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.topbarDivider {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: $border;
+}
+
+.topbarButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  color: #1b1f24;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #f2f3f5;
+  }
+
+  &:disabled {
+    color: #c9cdd4;
+    cursor: not-allowed;
+  }
+}
+
+.topbarButtonActive {
+  background: #eef3ff;
+  color: $primary;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 // 左侧幻灯片列表
