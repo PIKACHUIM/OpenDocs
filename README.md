@@ -152,7 +152,7 @@ scripts/            启动、构建、冒烟测试
 - [x] Excel 接入 Univer（公式、数字格式、多工作表）
 - [x] Word 接入 Univer Docs（docx 导出支持段落/文字样式/对齐）
 - [x] 演示文稿重写为自由画布（拖拽缩放、图层、放映、pptx 导出）
-- [ ] 图片编辑器与 PPT 的共用素材库
+- [x] 图片编辑器与 PPT 共用素材库（上传一次，两端复用）
 - [ ] Word 导出补齐表格与图片（Univer 无官方导出插件，需自研转换）
 - [ ] 实时协同（CRDT / Durable Objects）
 

@@ -154,9 +154,14 @@ export interface UploadedAsset {
   url: string;
   contentType: string;
   sizeBytes: number;
+  createdAt?: string;
 }
 
 export const assetApi = {
+  /** 素材库：当前用户上传过的图片 */
+  list: (params?: { limit?: number; offset?: number }) =>
+    api<{ assets: UploadedAsset[]; total: number }>(`/assets${query(params ?? {})}`),
+
   upload: async (
     file: File,
     options?: { documentId?: string; shareToken?: string }

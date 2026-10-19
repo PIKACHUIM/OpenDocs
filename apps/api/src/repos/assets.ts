@@ -48,6 +48,21 @@ export function createAssetRepo(sql: SqlClient) {
   const listByDocument = (documentId: string) =>
     sql.all<AssetRecord>('SELECT * FROM assets WHERE document_id = ? ORDER BY created_at ASC', [documentId]);
 
+  /** 素材库：当前用户上传过的全部图片（含文档内嵌的） */
+  const listByOwner = (ownerId: string, limit = 60, offset = 0) =>
+    sql.all<AssetRecord>(
+      'SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [ownerId, limit, offset]
+    );
+
+  const countByOwner = async (ownerId: string): Promise<number> => {
+    const row = await sql.first<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM assets WHERE owner_id = ?',
+      [ownerId]
+    );
+    return row?.n ?? 0;
+  };
+
   const sumSizeByOwner = async (ownerId: string): Promise<number> => {
     const row = await sql.first<{ n: number }>(
       'SELECT SUM(size_bytes) AS n FROM assets WHERE owner_id = ?',
@@ -56,7 +71,15 @@ export function createAssetRepo(sql: SqlClient) {
     return row?.n ?? 0;
   };
 
-  return { create, getById, remove, listByDocument, sumSizeByOwner };
+  return {
+    create,
+    getById,
+    remove,
+    listByDocument,
+    listByOwner,
+    countByOwner,
+    sumSizeByOwner,
+  };
 }
 
 export type AssetRepo = ReturnType<typeof createAssetRepo>;

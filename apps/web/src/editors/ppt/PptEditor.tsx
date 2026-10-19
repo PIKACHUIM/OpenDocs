@@ -9,6 +9,7 @@ import {
   type SlideShapeElement,
   type SlideTextElement,
 } from '../../api';
+import { AssetPicker } from '../../ui/AssetPicker';
 import styles from './ppt.module.scss';
 
 export interface PptEditorProps {
@@ -91,12 +92,13 @@ function migrateSlide(slide: PptSlide): SlideElement[] {
   return elements;
 }
 
-export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
+export function PptEditor({ content, canWrite, documentId, onChange }: PptEditorProps) {
   const [active, setActive] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scale, setScale] = useState(0.5);
   const [presenting, setPresenting] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -195,20 +197,16 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
       radius: 16,
     } as SlideShapeElement);
 
-  const addImage = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      addElement({
-        id: createId('el'),
-        type: 'image',
-        x: 340,
-        y: 200,
-        w: 600,
-        h: 337,
-        src: String(reader.result),
-      });
-    reader.readAsDataURL(file);
-  };
+  const addImageUrl = (src: string) =>
+    addElement({
+      id: createId('el'),
+      type: 'image',
+      x: 340,
+      y: 200,
+      w: 600,
+      h: 337,
+      src,
+    });
 
   const removeElement = (id: string) => {
     patchSlide(active, { elements: elements.filter((item) => item.id !== id) });
@@ -230,6 +228,33 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
     const copy = [...elements];
     [copy[index], copy[next]] = [copy[next], copy[index]];
     patchSlide(active, { elements: copy });
+  };
+
+  /** 元素对齐到幻灯片画布 */
+  const alignElement = (
+    id: string,
+    axis: 'left' | 'centerX' | 'right' | 'top' | 'middle' | 'bottom'
+  ) => {
+    const element = elements.find((item) => item.id === id);
+    if (!element) return;
+    const offsets = {
+      left: { x: 0 },
+      centerX: { x: Math.round((SLIDE_WIDTH - element.w) / 2) },
+      right: { x: SLIDE_WIDTH - element.w },
+      top: { y: 0 },
+      middle: { y: Math.round((SLIDE_HEIGHT - element.h) / 2) },
+      bottom: { y: SLIDE_HEIGHT - element.h },
+    } as const;
+    patchElement(id, offsets[axis] as never);
+  };
+
+  const moveSlide = (direction: 1 | -1) => {
+    const next = active + direction;
+    if (next < 0 || next >= slides.length) return;
+    const copy = [...slides];
+    [copy[active], copy[next]] = [copy[next], copy[active]];
+    updateSlides(copy);
+    setActive(next);
   };
 
   const addSlide = () => {
@@ -440,19 +465,9 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
               <button type="button" className={styles.propButton} onClick={() => addShape('ellipse')}>
                 圆形
               </button>
-              <label className={styles.propButton} style={{ cursor: 'pointer' }}>
+              <button type="button" className={styles.propButton} onClick={() => setPickerOpen(true)}>
                 图片
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) addImage(file);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
+              </button>
             </div>
 
             <div className={styles.propField}>
@@ -488,6 +503,33 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
                 ))}
               </div>
             </div>
+
+            {canWrite ? (
+              <div className={styles.propField}>
+                <span>对齐画布</span>
+                <div className={styles.propActions}>
+                  {(
+                    [
+                      ['left', '左'],
+                      ['centerX', '横中'],
+                      ['right', '右'],
+                      ['top', '上'],
+                      ['middle', '纵中'],
+                      ['bottom', '下'],
+                    ] as const
+                  ).map(([axis, label]) => (
+                    <button
+                      key={axis}
+                      type="button"
+                      className={styles.propButton}
+                      onClick={() => alignElement(selected.id, axis)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {selected.type === 'text' ? (
               <>
@@ -609,6 +651,12 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
           </button>
           {canWrite ? (
             <>
+              <button type="button" className={styles.propButton} onClick={() => moveSlide(-1)}>
+                上移页
+              </button>
+              <button type="button" className={styles.propButton} onClick={() => moveSlide(1)}>
+                下移页
+              </button>
               <button type="button" className={styles.propButton} onClick={duplicateSlide}>
                 复制页
               </button>
@@ -670,6 +718,13 @@ export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
           </div>
         </div>
       ) : null}
+
+      <AssetPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(asset) => addImageUrl(asset.url)}
+        documentId={documentId}
+      />
     </div>
   );
 }

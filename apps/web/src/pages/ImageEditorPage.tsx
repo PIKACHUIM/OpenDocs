@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { navigate } from '../lib/router';
+import { AssetPicker } from '../ui/AssetPicker';
 import styles from '../ui/common.module.scss';
 
 type Align = 'left' | 'center' | 'right';
@@ -58,6 +59,7 @@ export function ImageEditorPage() {
   const [layers, setLayers] = useState<Layer[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(
@@ -213,22 +215,18 @@ export function ImageEditorPage() {
     setSelected(layer.id);
   };
 
-  const addImage = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const layer: ImageLayer = {
-        id: uid(),
-        type: 'image',
-        x: Math.round(size.w * 0.1),
-        y: Math.round(size.h * 0.1),
-        w: Math.round(size.w * 0.8),
-        h: Math.round(size.h * 0.5),
-        src: String(reader.result),
-      };
-      setLayers((prev) => [...prev, layer]);
-      setSelected(layer.id);
+  const addImageUrl = (src: string) => {
+    const layer: ImageLayer = {
+      id: uid(),
+      type: 'image',
+      x: Math.round(size.w * 0.1),
+      y: Math.round(size.h * 0.1),
+      w: Math.round(size.w * 0.8),
+      h: Math.round(size.h * 0.5),
+      src,
     };
-    reader.readAsDataURL(file);
+    setLayers((prev) => [...prev, layer]);
+    setSelected(layer.id);
   };
 
   const removeLayer = (id: string) => {
@@ -392,19 +390,9 @@ export function ImageEditorPage() {
         <button type="button" className={styles.button} onClick={() => addShape('ellipse')}>
           圆形
         </button>
-        <label className={styles.button} style={{ cursor: 'pointer' }}>
+        <button type="button" className={styles.button} onClick={() => setPickerOpen(true)}>
           图片
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) addImage(file);
-              event.target.value = '';
-            }}
-          />
-        </label>
+        </button>
         <button
           type="button"
           className={`${styles.button} ${styles.buttonPrimary}`}
@@ -687,6 +675,12 @@ export function ImageEditorPage() {
           </p>
         </aside>
       </div>
+
+      <AssetPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(asset) => addImageUrl(asset.url)}
+      />
     </div>
   );
 }

@@ -93,6 +93,36 @@ assetRoutes.post('/', async (c) => {
 });
 
 /**
+ * 素材库：当前用户上传过的图片。
+ * 图片编辑器与演示文稿的「从素材库选择」共用这一个接口。
+ */
+assetRoutes.get('/', async (c) => {
+  const user = c.get('user');
+  if (!user) throw forbidden('请先登录');
+
+  const rawLimit = Number.parseInt(c.req.query('limit') ?? '', 10);
+  const rawOffset = Number.parseInt(c.req.query('offset') ?? '', 10);
+  const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, rawLimit)) : 60;
+  const offset = Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0;
+
+  const [items, total] = await Promise.all([
+    c.get('repos').assets.listByOwner(user.id, limit, offset),
+    c.get('repos').assets.countByOwner(user.id),
+  ]);
+
+  return json({
+    assets: items.map((asset) => ({
+      id: asset.id,
+      url: `/api/assets/${asset.id}`,
+      contentType: asset.content_type,
+      sizeBytes: asset.size_bytes,
+      createdAt: asset.created_at,
+    })),
+    total,
+  });
+});
+
+/**
  * 下载/预览资源。资源 id 是 128 位随机值，天然具备「不可猜测令牌」属性，
  * 因此只要文档处于任意链接分享状态即放行查看——这与业界常见的「知道链接即可访问」
  * 分享模型一致（成员/所有者走正常权限判断）。

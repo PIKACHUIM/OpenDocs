@@ -1437,6 +1437,36 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   }
 }
 
+// 素材库网格
+.assetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.assetItem {
+  padding: 0;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  background: $surface-hover;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: $primary;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
 // 图层面板
 .layerList {
   display: flex;
