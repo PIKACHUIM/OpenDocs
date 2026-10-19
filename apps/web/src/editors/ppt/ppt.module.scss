@@ -164,6 +164,25 @@ $bg: #f2f3f5;
   outline: 1px solid $primary;
 }
 
+// 拖拽吸附参考线
+.guideV {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #f53f3f;
+  pointer-events: none;
+}
+
+.guideH {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #f53f3f;
+  pointer-events: none;
+}
+
 .handle {
   position: absolute;
   right: -5px;

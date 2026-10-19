@@ -34,6 +34,19 @@ interface ShapeLayer extends BaseLayer {
 interface ImageLayer extends BaseLayer {
   type: 'image';
   src: string;
+  /** 百分比，100 表示原样 */
+  brightness?: number;
+  contrast?: number;
+  saturate?: number;
+}
+
+/** 把滤镜参数拼成 CSS/canvas 都能用的 filter 字符串 */
+function filterOf(layer: ImageLayer): string | undefined {
+  const parts: string[] = [];
+  if (layer.brightness !== undefined) parts.push(`brightness(${layer.brightness}%)`);
+  if (layer.contrast !== undefined) parts.push(`contrast(${layer.contrast}%)`);
+  if (layer.saturate !== undefined) parts.push(`saturate(${layer.saturate}%)`);
+  return parts.length ? parts.join(' ') : undefined;
 }
 
 type Layer = TextLayer | ShapeLayer | ImageLayer;
@@ -352,7 +365,10 @@ export function ImageEditorPage() {
         ctx.globalAlpha = layer.opacity ?? 1;
         if (layer.type === 'image') {
           const image = await loadImage(layer.src);
+          const filter = filterOf(layer);
+          if (filter) ctx.filter = filter;
           ctx.drawImage(image, layer.x, layer.y, layer.w, layer.h);
+          ctx.filter = 'none';
           continue;
         }
         if (layer.type === 'rect' || layer.type === 'ellipse') {
@@ -493,7 +509,13 @@ export function ImageEditorPage() {
                   <img
                     src={layer.src}
                     alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'fill',
+                      pointerEvents: 'none',
+                      filter: filterOf(layer),
+                    }}
                   />
                 ) : (
                   <div
@@ -604,6 +626,39 @@ export function ImageEditorPage() {
                     </div>
                   </div>
                 </>
+              ) : null}
+
+              {current.type === 'image' ? (
+                <div className={styles.field}>
+                  <span className={styles.label}>滤镜</span>
+                  {(
+                    [
+                      ['brightness', '亮度'],
+                      ['contrast', '对比度'],
+                      ['saturate', '饱和度'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label
+                      key={key}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}
+                    >
+                      <span style={{ width: 44, color: '#86909c' }}>{label}</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={(current as ImageLayer)[key] ?? 100}
+                        onChange={(event) =>
+                          patch(current.id, { [key]: Number(event.target.value) } as never)
+                        }
+                        style={{ flex: 1 }}
+                      />
+                      <span style={{ width: 36, textAlign: 'right', color: '#86909c' }}>
+                        {(current as ImageLayer)[key] ?? 100}%
+                      </span>
+                    </label>
+                  ))}
+                </div>
               ) : null}
 
               {current.type === 'rect' || current.type === 'ellipse' ? (

@@ -99,6 +99,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   const [presenting, setPresenting] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -223,14 +224,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       align: 'left',
     });
 
-  const addShape = (type: 'rect' | 'ellipse') =>
+  const addShape = (type: 'rect' | 'ellipse' | 'triangle' | 'line') =>
     addElement({
       id: createId('el'),
       type,
       x: 420,
-      y: 240,
+      y: type === 'line' ? 360 : 240,
       w: 440,
-      h: 240,
+      h: type === 'line' ? 4 : 240,
       fill: '#3370ff',
       radius: 16,
     } as SlideShapeElement);
@@ -365,11 +366,30 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     const dx = (clientX - drag.startX) / scale;
     const dy = (clientY - drag.startY) / scale;
     if (drag.mode === 'move') {
-      patchElement(
-        drag.id,
-        { x: Math.round(drag.origin.x + dx), y: Math.round(drag.origin.y + dy) },
-        false
-      );
+      let nextX = Math.round(drag.origin.x + dx);
+      let nextY = Math.round(drag.origin.y + dy);
+      let guideV: number | null = null;
+      let guideH: number | null = null;
+
+      // 吸附到画布左/中/右、上/中/下（阈值 6px），并显示参考线
+      const snapX = [0, Math.round((SLIDE_WIDTH - drag.origin.w) / 2), SLIDE_WIDTH - drag.origin.w];
+      const snapY = [0, Math.round((SLIDE_HEIGHT - drag.origin.h) / 2), SLIDE_HEIGHT - drag.origin.h];
+      for (const target of snapX) {
+        if (Math.abs(nextX - target) <= 6) {
+          nextX = target;
+          guideV = target + drag.origin.w / 2;
+          break;
+        }
+      }
+      for (const target of snapY) {
+        if (Math.abs(nextY - target) <= 6) {
+          nextY = target;
+          guideH = target + drag.origin.h / 2;
+          break;
+        }
+      }
+      setGuides({ v: guideV, h: guideH });
+      patchElement(drag.id, { x: nextX, y: nextY }, false);
     } else {
       patchElement(
         drag.id,
@@ -391,6 +411,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const onPointerUp = () => {
     dragRef.current = null;
+    setGuides({ v: null, h: null });
     if (rafRef.current !== null) {
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -425,6 +446,26 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           src={element.src}
           alt=""
           style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+        />
+      );
+    }
+    if (element.type === 'triangle') {
+      return (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            background: element.fill,
+            clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+            pointerEvents: 'none',
+          }}
+        />
+      );
+    }
+    if (element.type === 'line') {
+      return (
+        <div
+          style={{ width: '100%', height: '100%', background: element.fill, pointerEvents: 'none' }}
         />
       );
     }
@@ -467,6 +508,22 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             onClick={() => addShape('ellipse')}
           >
             圆形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('triangle')}
+          >
+            三角
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('line')}
+          >
+            线条
           </button>
           <button
             type="button"
@@ -634,6 +691,13 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               ) : null}
             </div>
           ))}
+
+          {guides.v !== null ? (
+            <span className={styles.guideV} style={{ left: guides.v * scale }} />
+          ) : null}
+          {guides.h !== null ? (
+            <span className={styles.guideH} style={{ top: guides.h * scale }} />
+          ) : null}
         </div>
       </div>
 
@@ -955,7 +1019,11 @@ function SlidePreview({ slide }: { slide: PptSlide }) {
                 width: '100%',
                 height: '100%',
                 background: element.fill,
-                borderRadius: element.type === 'rect' ? 2 : '50%',
+                borderRadius: element.type === 'rect' || element.type === 'line' ? 2 : '50%',
+                clipPath:
+                  element.type === 'triangle'
+                    ? 'polygon(50% 0%, 100% 100%, 0% 100%)'
+                    : undefined,
               }}
             />
           )}

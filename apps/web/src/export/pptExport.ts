@@ -90,11 +90,25 @@ async function buildSlide(pptx: PptxGenJS, data: PptSlide) {
       continue;
     }
 
-    if (element.type === 'rect' || element.type === 'ellipse') {
-      slide.addShape(
-        element.type === 'rect' ? pptx.ShapeType.rect : pptx.ShapeType.ellipse,
-        { ...box, fill: { color: hex(element.fill, '3370FF') }, line: { color: hex(element.fill, '3370FF') } }
-      );
+    if (
+      element.type === 'rect' ||
+      element.type === 'ellipse' ||
+      element.type === 'triangle' ||
+      element.type === 'line'
+    ) {
+      const shapeType =
+        element.type === 'rect'
+          ? pptx.ShapeType.rect
+          : element.type === 'ellipse'
+            ? pptx.ShapeType.ellipse
+            : element.type === 'triangle'
+              ? pptx.ShapeType.triangle
+              : pptx.ShapeType.line;
+      slide.addShape(shapeType, {
+        ...box,
+        fill: { color: hex(element.fill, '3370FF') },
+        line: { color: hex(element.fill, '3370FF') },
+      });
       continue;
     }
 

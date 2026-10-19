@@ -64,6 +64,9 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <button type="button" className={styles.navItem} onClick={() => quickCreate('excel')}>
           Excel
         </button>
+        <button type="button" className={styles.navItem} onClick={() => quickCreate('ppt')}>
+          演示文稿
+        </button>
         <button type="button" className={styles.navItem} onClick={() => quickCreate('markdown')}>
           Markdown
         </button>

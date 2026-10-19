@@ -86,7 +86,7 @@ export interface SlideTextElement extends SlideElementBase {
 }
 
 export interface SlideShapeElement extends SlideElementBase {
-  type: 'rect' | 'ellipse';
+  type: 'rect' | 'ellipse' | 'triangle' | 'line';
   fill: string;
   radius?: number;
 }
