@@ -44,6 +44,16 @@ const SCOPE_LABEL: Record<Scope, string> = {
   trash: '最近删除',
 };
 
+/** 分区 tab 的顺序 */
+const SCOPE_ORDER: Array<{ key: Scope; label: string }> = [
+  { key: 'recent', label: '最近' },
+  { key: 'owned', label: '我的文档' },
+  { key: 'shared', label: '与我共享' },
+  { key: 'sent', label: '我的分享' },
+  { key: 'starred', label: '收藏文档' },
+  { key: 'trash', label: '最近删除' },
+];
+
 /** 右键菜单的目标：文档或目录 */
 type ContextTarget =
   | { kind: 'document'; doc: ApiDocument; x: number; y: number }
@@ -505,69 +515,6 @@ export function DocumentsPage() {
             + 新建
           </button>
 
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${scope === 'recent' ? styles.sidebarItemActive : ''}`}
-            onClick={() => {
-              setScope('recent');
-              setFolderId(null);
-            }}
-          >
-            最近
-          </button>
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${
-              scope === 'owned' && !folderId ? styles.sidebarItemActive : ''
-            }`}
-            onClick={() => {
-              setScope('owned');
-              setFolderId(null);
-            }}
-          >
-            我的文档
-          </button>
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${scope === 'shared' ? styles.sidebarItemActive : ''}`}
-            onClick={() => {
-              setScope('shared');
-              setFolderId(null);
-            }}
-          >
-            与我共享
-          </button>
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${scope === 'sent' ? styles.sidebarItemActive : ''}`}
-            onClick={() => {
-              setScope('sent');
-              setFolderId(null);
-            }}
-          >
-            我的分享
-          </button>
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${scope === 'starred' ? styles.sidebarItemActive : ''}`}
-            onClick={() => {
-              setScope('starred');
-              setFolderId(null);
-            }}
-          >
-            收藏文档
-          </button>
-          <button
-            type="button"
-            className={`${styles.sidebarItem} ${scope === 'trash' ? styles.sidebarItemActive : ''}`}
-            onClick={() => {
-              setScope('trash');
-              setFolderId(null);
-            }}
-          >
-            最近删除
-          </button>
-
           <div className={styles.sidebarSection}>目录</div>
           {renderFolderTree(null, 0)}
           <button type="button" className={styles.sidebarItem} onClick={() => setFolderModalOpen(true)}>
@@ -576,6 +523,22 @@ export function DocumentsPage() {
         </aside>
 
         <main className={styles.docsMain}>
+          <div className={styles.tabs}>
+            {SCOPE_ORDER.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`${styles.tab} ${scope === item.key ? styles.tabActive : ''}`}
+                onClick={() => {
+                  setScope(item.key);
+                  setFolderId(null);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           <div className={styles.docsToolbar}>
             <div className={styles.breadcrumb}>
               <button

@@ -417,6 +417,46 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   }
 }
 
+// 分段 tab：管理后台、分享弹窗、首页与文档管理共用
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: $radius;
+  background: $surface-active;
+  margin-bottom: 16px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: $text;
+  }
+}
+
+.tabActive {
+  background: $surface;
+  color: $text;
+  box-shadow: $shadow-sm;
+
+  &:hover {
+    color: $text;
+  }
+}
+
 // 顶栏导航
 .nav {
   display: flex;
@@ -1247,6 +1287,61 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   font-size: 12px;
   color: $faint;
   text-align: center;
+}
+
+// ---------------------------------------------------------------------------
+// 首页工作台：顶栏 + tab + 内容面板（与文档管理、管理后台同一套结构）
+// ---------------------------------------------------------------------------
+
+.workspaceShell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: $bg;
+}
+
+.workspaceBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 18px;
+}
+
+.workspacePanel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  background: $surface;
+  overflow: hidden;
+}
+
+.panelEmpty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.panelTitle {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.panelDesc {
+  margin: 0;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.85;
+  color: $muted;
 }
 
 // ---------------------------------------------------------------------------
