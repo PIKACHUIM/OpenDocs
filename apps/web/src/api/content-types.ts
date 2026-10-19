@@ -51,7 +51,14 @@ export interface ExcelSheet {
 export interface ExcelContent {
   type: 'excel';
   version: number;
+  /** 旧版（FortuneSheet）数据；仅用于兼容历史文档 */
   sheets: ExcelSheet[];
+  /**
+   * 新版（Univer）工作簿快照。
+   * 与 sheets 并存：新文档只写 univer，历史文档只写 sheets，
+   * 读取时按「有 univer 用 Univer，没有但有数据用 FortuneSheet」分派。
+   */
+  univer?: unknown;
 }
 
 export type SlideLayout = 'title' | 'title-body' | 'two-column' | 'blank';

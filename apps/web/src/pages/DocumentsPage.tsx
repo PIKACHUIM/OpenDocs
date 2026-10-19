@@ -36,7 +36,7 @@ type Scope = 'recent' | 'owned' | 'shared' | 'sent' | 'starred' | 'trash';
 type View = 'list' | 'card';
 
 const SCOPE_LABEL: Record<Scope, string> = {
-  recent: '最近',
+  recent: '最近使用',
   owned: '我的文档',
   shared: '与我共享',
   sent: '我的分享',

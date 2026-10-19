@@ -98,6 +98,104 @@ export function ImageEditorPage() {
     setSelected(layer.id);
   };
 
+  /** 内置模板：给"从零开始"提供一个可用的起点 */
+  const applyTemplate = (kind: 'cover' | 'quote' | 'list') => {
+    const text = (partial: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'h' | 'text'>): TextLayer => ({
+      id: uid(),
+      type: 'text',
+      color: '#1b1f24',
+      fontSize: 56,
+      bold: true,
+      align: 'left',
+      ...partial,
+    });
+
+    if (kind === 'cover') {
+      setBackground('#f5f6f8');
+      setLayers([
+        {
+          id: uid(),
+          type: 'rect',
+          x: Math.round(size.w * 0.08),
+          y: Math.round(size.h * 0.08),
+          w: Math.round(size.w * 0.84),
+          h: Math.round(size.h * 0.84),
+          fill: '#ffffff',
+          radius: 24,
+        },
+        text({
+          x: Math.round(size.w * 0.14),
+          y: Math.round(size.h * 0.32),
+          w: Math.round(size.w * 0.72),
+          h: 200,
+          text: '在这里写标题',
+          fontSize: 88,
+        }),
+        text({
+          x: Math.round(size.w * 0.14),
+          y: Math.round(size.h * 0.5),
+          w: Math.round(size.w * 0.72),
+          h: 120,
+          text: '一行副标题，说明这张图要讲什么',
+          fontSize: 44,
+          bold: false,
+          color: '#4e5969',
+        }),
+      ]);
+      return;
+    }
+
+    if (kind === 'quote') {
+      setBackground('#1b1f24');
+      setLayers([
+        text({
+          x: Math.round(size.w * 0.12),
+          y: Math.round(size.h * 0.3),
+          w: Math.round(size.w * 0.76),
+          h: 320,
+          text: '“一句值得被记住的话。”',
+          fontSize: 76,
+          color: '#ffffff',
+          align: 'center',
+        }),
+        text({
+          x: Math.round(size.w * 0.12),
+          y: Math.round(size.h * 0.62),
+          w: Math.round(size.w * 0.76),
+          h: 80,
+          text: '—— 出处',
+          fontSize: 40,
+          bold: false,
+          color: '#a9b1bb',
+          align: 'center',
+        }),
+      ]);
+      return;
+    }
+
+    setBackground('#ffffff');
+    setLayers([
+      text({
+        x: Math.round(size.w * 0.1),
+        y: Math.round(size.h * 0.1),
+        w: Math.round(size.w * 0.8),
+        h: 120,
+        text: '清单标题',
+        fontSize: 72,
+      }),
+      text({
+        x: Math.round(size.w * 0.1),
+        y: Math.round(size.h * 0.28),
+        w: Math.round(size.w * 0.8),
+        h: Math.round(size.h * 0.5),
+        text: '01  第一件事\n02  第二件事\n03  第三件事',
+        fontSize: 52,
+        bold: false,
+        color: '#1b1f24',
+      }),
+    ]);
+  };
+
   const addShape = (type: 'rect' | 'ellipse') => {
     const layer: ShapeLayer = {
       id: uid(),
@@ -247,6 +345,15 @@ export function ImageEditorPage() {
         </button>
         <span className={styles.imageTitle}>图片编辑</span>
         <span className={styles.grow} />
+        <button type="button" className={styles.button} onClick={() => applyTemplate('cover')}>
+          封面模板
+        </button>
+        <button type="button" className={styles.button} onClick={() => applyTemplate('quote')}>
+          引用模板
+        </button>
+        <button type="button" className={styles.button} onClick={() => applyTemplate('list')}>
+          清单模板
+        </button>
         <button type="button" className={styles.button} onClick={addText}>
           文字
         </button>
