@@ -10,6 +10,8 @@ interface BaseLayer {
   y: number;
   w: number;
   h: number;
+  /** 0–1，默认 1 */
+  opacity?: number;
 }
 
 interface TextLayer extends BaseLayer {
@@ -234,6 +236,32 @@ export function ImageEditorPage() {
     if (selected === id) setSelected(null);
   };
 
+  const duplicateLayer = (id: string) => {
+    const source = layers.find((layer) => layer.id === id);
+    if (!source) return;
+    const copy = { ...source, id: uid(), x: source.x + 24, y: source.y + 24 } as Layer;
+    setLayers((prev) => [...prev, copy]);
+    setSelected(copy.id);
+  };
+
+  /** 对齐到画布：poster-design 里最常用的一组操作 */
+  const alignLayer = (
+    id: string,
+    axis: 'left' | 'centerX' | 'right' | 'top' | 'middle' | 'bottom'
+  ) => {
+    const layer = layers.find((item) => item.id === id);
+    if (!layer) return;
+    const offsets = {
+      left: { x: 0 },
+      centerX: { x: Math.round((size.w - layer.w) / 2) },
+      right: { x: size.w - layer.w },
+      top: { y: 0 },
+      middle: { y: Math.round((size.h - layer.h) / 2) },
+      bottom: { y: size.h - layer.h },
+    } as const;
+    patch(id, offsets[axis] as never);
+  };
+
   const moveLayer = (id: string, direction: 1 | -1) => {
     setLayers((prev) => {
       const index = prev.findIndex((layer) => layer.id === id);
@@ -283,6 +311,7 @@ export function ImageEditorPage() {
       ctx.fillRect(0, 0, size.w, size.h);
 
       for (const layer of layers) {
+        ctx.globalAlpha = layer.opacity ?? 1;
         if (layer.type === 'image') {
           const image = await loadImage(layer.src);
           ctx.drawImage(image, layer.x, layer.y, layer.w, layer.h);
@@ -406,6 +435,7 @@ export function ImageEditorPage() {
                   top: layer.y * scale,
                   width: layer.w * scale,
                   height: layer.h * scale,
+                  opacity: layer.opacity ?? 1,
                 }}
                 onPointerDown={(event) => onPointerDown(event, layer)}
                 onPointerMove={onPointerMove}
@@ -557,12 +587,55 @@ export function ImageEditorPage() {
                 </div>
               ) : null}
 
+              <div className={styles.field}>
+                <span className={styles.label}>对齐画布</span>
+                <div className={styles.row}>
+                  {(
+                    [
+                      ['left', '左'],
+                      ['centerX', '水平居中'],
+                      ['right', '右'],
+                      ['top', '上'],
+                      ['middle', '垂直居中'],
+                      ['bottom', '下'],
+                    ] as const
+                  ).map(([axis, label]) => (
+                    <button
+                      key={axis}
+                      type="button"
+                      className={`${styles.button} ${styles.buttonSm}`}
+                      onClick={() => alignLayer(current.id, axis)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.field}>
+                <span className={styles.label}>不透明度</span>
+                <input
+                  className={styles.input}
+                  type="range"
+                  min={0.1}
+                  max={1}
+                  step={0.05}
+                  value={current.opacity ?? 1}
+                  onChange={(event) =>
+                    patch(current.id, { opacity: Number(event.target.value) } as never)
+                  }
+                />
+              </div>
+
               <div className={styles.row}>
                 <button type="button" className={styles.button} onClick={() => moveLayer(current.id, -1)}>
-                  下移一层
+                  下移
                 </button>
                 <button type="button" className={styles.button} onClick={() => moveLayer(current.id, 1)}>
-                  上移一层
+                  上移
+                </button>
+                <button type="button" className={styles.button} onClick={() => duplicateLayer(current.id)}>
+                  复制
                 </button>
                 <button
                   type="button"
@@ -577,8 +650,40 @@ export function ImageEditorPage() {
             <p className={styles.hint}>选中画布中的元素后可调整位置、大小与颜色。</p>
           )}
 
+          <div className={styles.field} style={{ marginTop: 4 }}>
+            <span className={styles.label}>图层（{layers.length}）</span>
+            <div className={styles.layerList}>
+              {layers.length === 0 ? (
+                <p className={styles.hint}>还没有元素，用上方按钮添加。</p>
+              ) : (
+                [...layers]
+                  .reverse()
+                  .map((layer) => (
+                    <button
+                      key={layer.id}
+                      type="button"
+                      className={`${styles.layerItem} ${
+                        selected === layer.id ? styles.layerItemActive : ''
+                      }`}
+                      onClick={() => setSelected(layer.id)}
+                    >
+                      <span className={styles.layerItemText}>
+                        {layer.type === 'text'
+                          ? `文字：${layer.text.slice(0, 10) || '空'}`
+                          : layer.type === 'image'
+                            ? '图片'
+                            : layer.type === 'rect'
+                              ? '矩形'
+                              : '圆形'}
+                      </span>
+                    </button>
+                  ))
+              )}
+            </div>
+          </div>
+
           <p className={styles.hint} style={{ marginTop: 16 }}>
-            当前为图片编辑首版：背景、文字、形状、图片与图层顺序。素材库与模板属于下一阶段。
+            当前为图片编辑 v2：模板、图层管理与对齐已具备；素材库与模板市场需要后端素材体系，属于下一阶段。
           </p>
         </aside>
       </div>
