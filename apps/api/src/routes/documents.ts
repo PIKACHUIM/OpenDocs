@@ -51,11 +51,22 @@ async function loadAccessible(c: Context<ApiEnv>, id: string) {
 
 documentRoutes.get('/', async (c) => {
   const user = c.get('user')!;
-  const scope = c.req.query('scope') === 'shared' ? 'shared' : 'owned';
+  const scopeParam = c.req.query('scope');
+  const scope = scopeParam === 'shared' ? 'shared' : scopeParam === 'sent' ? 'sent' : 'owned';
   const { page, pageSize } = paging(c.req.query('page'), c.req.query('pageSize'));
   const query = optionalString(c.req.query('q'), 200);
   const type = c.req.query('type');
   const trashed = c.req.query('trashed') === 'true';
+  const starred = c.req.query('starred') === 'true';
+  const recent = c.req.query('recent') === 'true';
+  // folderId 三态：不传 = 不限目录；空字符串 / "root" = 根目录（未归档）；具体 id = 该目录
+  const folderParam = c.req.query('folderId');
+  const folderId =
+    folderParam === undefined
+      ? undefined
+      : folderParam === '' || folderParam === 'root'
+        ? null
+        : folderParam;
 
   if (scope === 'shared') {
     const result = await c.get('repos').documents.listSharedWithMe(user.id, { page, pageSize, query });
@@ -69,26 +80,66 @@ documentRoutes.get('/', async (c) => {
     });
   }
 
+  if (scope === 'sent') {
+    const result = await c.get('repos').documents.listSharedByMe(user.id, { page, pageSize, query });
+    return json({
+      documents: result.items.map((item) => toPublicDocument(item, { myRole: 'owner' })),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+    });
+  }
+
+  // 打开「最近删除」时惰性清理过期条目，避免为清理单独跑定时任务
+  let retentionDays: number | undefined;
+  if (trashed) {
+    retentionDays = await c.get('settings').trashRetentionDays();
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const expired = await c.get('repos').documents.listTrashedBefore(user.id, cutoff);
+    for (const doc of expired) {
+      await c.get('runtime').files.delete(doc.content_key);
+      await c.get('repos').members.removeAllForDocument(doc.id);
+      await c.get('repos').documents.hardDelete(doc.id);
+    }
+  }
+
   const result = await c.get('repos').documents.listOwned(user.id, {
     page,
     pageSize,
     query,
     type: type ? assertType(type) : undefined,
     trashed,
+    starred,
+    recent,
+    folderId,
   });
   return json({
     documents: result.items.map((item) => toPublicDocument(item, { myRole: 'owner' })),
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
+    retentionDays,
   });
 });
 
 documentRoutes.post('/', async (c) => {
   const user = c.get('user')!;
-  const body = await readJson<{ type?: unknown; title?: unknown; content?: unknown }>(c.req.raw);
+  const body = await readJson<{
+    type?: unknown;
+    title?: unknown;
+    content?: unknown;
+    folderId?: unknown;
+  }>(c.req.raw);
   const type = assertType(body.type);
   const title = optionalString(body.title, 120) ?? '未命名文档';
+
+  // 目录必须是自己的，否则会变成「把文档挂到别人目录下」
+  let folderId: string | null = null;
+  if (typeof body.folderId === 'string' && body.folderId.trim()) {
+    const folder = await c.get('repos').folders.getActive(body.folderId.trim());
+    if (!folder || folder.owner_id !== user.id) throw badRequest('目标目录不存在');
+    folderId = folder.id;
+  }
 
   const content = normalizeDocumentContent(type, body.content ?? emptyContentFor(type));
   const serialized = JSON.stringify(content);
@@ -99,6 +150,7 @@ documentRoutes.post('/', async (c) => {
     type,
     title,
     sizeBytes: serialized.length,
+    folderId,
   });
   await c.get('runtime').files.put(document.content_key, serialized, 'application/json');
 
@@ -111,6 +163,11 @@ documentRoutes.get('/:id', async (c) => {
 
   const raw = await getText(c.get('runtime').files, document.content_key);
   const owner = await c.get('repos').users.getById(document.owner_id);
+
+  // 记录「最近打开」。只有所有者自己的视角才更新，避免别人打开你的文档改变你的排序
+  if (access === 'owner') {
+    await c.get('repos').documents.touchOpened(document.id);
+  }
 
   return json({
     document: toPublicDocument(document, { ownerName: owner?.display_name, myRole: access }),
@@ -165,9 +222,37 @@ documentRoutes.put('/:id', async (c) => {
 documentRoutes.patch('/:id', async (c) => {
   const { document, access } = await loadAccessible(c, c.req.param('id'));
   if (!canWrite(access)) throw forbidden('没有权限修改该文档');
-  const body = await readJson<{ title?: unknown }>(c.req.raw);
-  const title = requireString(body.title, 'title', { max: 120 });
-  const updated = await c.get('repos').documents.rename(document.id, title);
+  const body = await readJson<{ title?: unknown; folderId?: unknown; starred?: unknown }>(c.req.raw);
+
+  let updated: DocumentRecord | null = document;
+
+  if (body.title !== undefined) {
+    const title = requireString(body.title, 'title', { max: 120 });
+    updated = await c.get('repos').documents.rename(document.id, title);
+  }
+
+  // 归档与收藏属于「所有者自己的组织方式」，协作者（editor）无权改动
+  if (body.folderId !== undefined || body.starred !== undefined) {
+    if (access !== 'owner') throw forbidden('只有所有者可以归档或收藏文档');
+  }
+
+  if (body.folderId !== undefined) {
+    let folderId: string | null = null;
+    if (body.folderId !== null && body.folderId !== undefined) {
+      const raw = requireString(body.folderId, 'folderId', { max: 64, trim: true });
+      folderId = raw === '' || raw === 'root' ? null : raw;
+    }
+    if (folderId) {
+      const folder = await c.get('repos').folders.getActive(folderId);
+      if (!folder || folder.owner_id !== document.owner_id) throw badRequest('目标目录不存在');
+    }
+    updated = await c.get('repos').documents.setFolder(document.id, folderId);
+  }
+
+  if (body.starred !== undefined) {
+    updated = await c.get('repos').documents.setStarred(document.id, !!body.starred);
+  }
+
   return json({ document: updated ? toPublicDocument(updated, { myRole: access }) : null });
 });
 

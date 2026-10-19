@@ -6,12 +6,17 @@ export const SETTINGS_KEYS = {
   siteName: 'site_name',
   siteUrl: 'site_url',
   allowRegistration: 'allow_registration',
+  inviteRequired: 'invite_required',
+  trashRetentionDays: 'trash_retention_days',
   resendApiKey: 'resend_api_key',
   resendFrom: 'resend_from',
   turnstileEnabled: 'turnstile_enabled',
   turnstileSiteKey: 'turnstile_site_key',
   turnstileSecretKey: 'turnstile_secret_key',
 } as const;
+
+const DEFAULT_TRASH_RETENTION_DAYS = 30;
+const MAX_TRASH_RETENTION_DAYS = 365;
 
 const TRUE = new Set(['1', 'true', 'yes', 'on']);
 const FALSE = new Set(['0', 'false', 'no', 'off']);
@@ -43,7 +48,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
   const load = async (): Promise<Record<string, string>> => repo.getAll();
 
   const siteName = async (db?: Record<string, string>) =>
-    (db ?? (await load()))[SETTINGS_KEYS.siteName] || env.SITE_NAME || 'Drawnix';
+    (db ?? (await load()))[SETTINGS_KEYS.siteName] || env.SITE_NAME || 'OpenDocs';
 
   const siteUrl = async (db?: Record<string, string>) =>
     (db ?? (await load()))[SETTINGS_KEYS.siteUrl] || env.SITE_URL || '';
@@ -51,6 +56,24 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
   const allowRegistration = async (db?: Record<string, string>) => {
     const stored = (db ?? (await load()))[SETTINGS_KEYS.allowRegistration];
     return parseBool(stored, parseBool(env.ALLOW_REGISTRATION, true));
+  };
+
+  /** 是否需要邀请码才能注册；默认关闭，只有显式开启才强制 */
+  const inviteRequired = async (db?: Record<string, string>) => {
+    const stored = (db ?? (await load()))[SETTINGS_KEYS.inviteRequired];
+    return parseBool(stored, parseBool(env.INVITE_REQUIRED, false));
+  };
+
+  /**
+   * 「最近删除」的保留天数：超过后由服务端惰性清理（打开最近删除时触发）。
+   * 上限 365 天，避免把回收站当成长期存储。
+   */
+  const trashRetentionDays = async (db?: Record<string, string>) => {
+    const raw =
+      (db ?? (await load()))[SETTINGS_KEYS.trashRetentionDays] ?? env.TRASH_RETENTION_DAYS;
+    const value = Number.parseInt(String(raw ?? ''), 10);
+    if (!Number.isFinite(value) || value <= 0) return DEFAULT_TRASH_RETENTION_DAYS;
+    return Math.min(MAX_TRASH_RETENTION_DAYS, value);
   };
 
   const resendConfig = async (db?: Record<string, string>): Promise<ResendConfig> => {
@@ -81,6 +104,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
     return {
       siteName: await siteName(db),
       allowRegistration: await allowRegistration(db),
+      inviteRequired: await inviteRequired(db),
       turnstileEnabled: turnstile.enabled && !!turnstile.siteKey,
       turnstileSiteKey: turnstile.enabled ? turnstile.siteKey : null,
     };
@@ -95,6 +119,8 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
       siteName: await siteName(db),
       siteUrl: await siteUrl(db),
       allowRegistration: await allowRegistration(db),
+      inviteRequired: await inviteRequired(db),
+      trashRetentionDays: await trashRetentionDays(db),
       resendApiKeySet: !!resend.apiKey,
       resendApiKeyMasked: maskSecret(resend.apiKey),
       resendFrom: resend.from,
@@ -110,6 +136,8 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
     siteName,
     siteUrl,
     allowRegistration,
+    inviteRequired,
+    trashRetentionDays,
     resendConfig,
     turnstileConfig,
     publicConfig,

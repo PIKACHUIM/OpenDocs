@@ -1,21 +1,67 @@
-// 文档系统通用样式：认证页、文档中心、编辑器顶栏、管理后台共用。
-$border: #e4e7ec;
-$text: #1f2329;
-$muted: #6b7280;
-$primary: #4a6cf7;
-$primary-dark: #3a57d9;
-$danger: #e5484d;
-$bg: #ffffff;
-$radius: 10px;
+// ===========================================================================
+// 设计基线
+//
+// 参考腾讯文档一类「效率工具」的视觉语言：低饱和中性色、单一品牌蓝、
+// 细边框与极轻阴影、紧凑但不拥挤的间距。刻意避开：
+//   - 紫色/蓝紫渐变（AI 生成感最强的特征）
+//   - 大圆角 + 重阴影 + 玻璃拟态
+//   - emoji 当图标
+//   - 每个卡片都漂浮的悬浮动效
+// ===========================================================================
+
+$primary: #3370ff;
+$primary-hover: #245bdb;
+$primary-soft: #eef3ff;
+$primary-border: #c7d8ff;
+
+$text: #1b1f24;
+$text-secondary: #4e5969;
+$muted: #86909c;
+$faint: #a9b1bb;
+
+$border: #e5e6eb;
+$border-strong: #d5d8de;
+
+$bg: #f7f8fa;
+$surface: #ffffff;
+$surface-hover: #f5f6f7;
+$surface-active: #eef0f2;
+
+$danger: #f53f3f;
+$danger-soft: #fef1f1;
+$success: #00b42a;
+$warning: #ff7d00;
+
+$radius-sm: 6px;
+$radius: 8px;
+$radius-lg: 12px;
+
+$shadow-sm: 0 1px 2px rgba(27, 31, 36, 0.06);
+$shadow: 0 4px 16px rgba(27, 31, 36, 0.08);
+$shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 
 @mixin card {
   border: 1px solid $border;
-  border-radius: 12px;
-  background: $bg;
+  border-radius: $radius-lg;
+  background: $surface;
+}
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.14);
+  }
+}
+
+@mixin ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // ---------------------------------------------------------------------------
-// 认证页（登录/注册/找回密码）
+// 认证页
 // ---------------------------------------------------------------------------
 
 .authPage {
@@ -23,60 +69,67 @@ $radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f4f6fb 0%, #eef1fa 100%);
+  background: $bg;
   padding: 24px;
 }
 
 .authCard {
   width: 100%;
   max-width: 400px;
-  padding: 36px 32px;
+  padding: 40px 36px;
   @include card;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  box-shadow: $shadow;
 }
 
 .authTitle {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: $text;
   text-align: center;
 }
 
 .authSubtitle {
-  margin: 0 0 24px;
+  margin: 0 0 26px;
   font-size: 13px;
   color: $muted;
   text-align: center;
 }
 
 .authFooter {
-  margin-top: 20px;
+  margin-top: 22px;
   text-align: center;
   font-size: 13px;
   color: $muted;
+  line-height: 1.9;
 
   a {
     color: $primary;
     cursor: pointer;
-    text-decoration: none;
+
+    &:hover {
+      color: $primary-hover;
+      text-decoration: underline;
+    }
   }
 }
 
 // ---------------------------------------------------------------------------
-// 通用表单
+// 表单
 // ---------------------------------------------------------------------------
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: 7px;
+  margin-bottom: 18px;
 }
 
 .label {
   font-size: 12px;
-  color: $muted;
+  color: $text-secondary;
   font-weight: 500;
 }
 
@@ -84,22 +137,23 @@ $radius: 10px;
 .select,
 .textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid $border;
+  padding: 9px 12px;
+  border: 1px solid $border-strong;
   border-radius: $radius;
   font-size: 14px;
   color: $text;
-  background: #fff;
+  background: $surface;
   font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-  &:focus {
-    outline: none;
-    border-color: $primary;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.12);
+  &::placeholder {
+    color: $faint;
   }
 
+  @include focus-ring;
+
   &:disabled {
-    background: #f7f8fa;
+    background: $surface-hover;
     color: $muted;
   }
 }
@@ -115,32 +169,33 @@ $radius: 10px;
   gap: 8px;
   font-size: 13px;
   color: $text;
+  cursor: pointer;
 }
 
 .hint {
   font-size: 12px;
   color: $muted;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .error {
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: $radius;
-  background: rgba($danger, 0.08);
+  background: $danger-soft;
   color: $danger;
   font-size: 13px;
   margin-bottom: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .success {
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: $radius;
-  background: rgba(18, 183, 106, 0.1);
-  color: #087443;
+  background: rgba(0, 180, 42, 0.08);
+  color: #00831c;
   font-size: 13px;
   margin-bottom: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,18 +207,21 @@ $radius: 10px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 16px;
+  padding: 7px 14px;
   border-radius: $radius;
-  border: 1px solid $border;
-  background: $bg;
+  border: 1px solid $border-strong;
+  background: $surface;
   color: $text;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: #f7f8fa;
+    background: $surface-hover;
+    border-color: $border-strong;
   }
 
   &:disabled {
@@ -173,9 +231,9 @@ $radius: 10px;
 }
 
 .buttonSm {
-  padding: 5px 10px;
-  font-size: 13px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: $radius-sm;
 }
 
 .buttonBlock {
@@ -188,25 +246,28 @@ $radius: 10px;
   color: #fff;
 
   &:hover:not(:disabled) {
-    background: $primary-dark;
+    background: $primary-hover;
+    border-color: $primary-hover;
   }
 }
 
 .buttonDanger {
   color: $danger;
-  border-color: rgba($danger, 0.4);
+  border-color: rgba(245, 63, 63, 0.35);
 
   &:hover:not(:disabled) {
-    background: rgba($danger, 0.06);
+    background: $danger-soft;
   }
 }
 
 .buttonGhost {
   border-color: transparent;
   background: transparent;
+  color: $text-secondary;
 
   &:hover:not(:disabled) {
-    background: #f1f3f6;
+    background: $surface-hover;
+    color: $text;
   }
 }
 
@@ -222,34 +283,34 @@ $radius: 10px;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(27, 31, 36, 0.45);
 }
 
 .modal {
-  width: min(560px, 100%);
+  width: min(520px, 100%);
   max-height: min(85vh, 760px);
   display: flex;
   flex-direction: column;
   border-radius: 14px;
-  background: $bg;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  background: $surface;
+  box-shadow: $shadow-lg;
   overflow: hidden;
 }
 
 .modalWide {
-  width: min(960px, 100%);
+  width: min(880px, 100%);
 }
 
 .modalHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px;
+  padding: 18px 20px;
   border-bottom: 1px solid $border;
 
   h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: $text;
   }
@@ -263,14 +324,16 @@ $radius: 10px;
   color: $muted;
   cursor: pointer;
   padding: 0 4px;
+  border-radius: $radius-sm;
 
   &:hover {
     color: $text;
+    background: $surface-hover;
   }
 }
 
 .modalBody {
-  padding: 18px;
+  padding: 20px;
   overflow: auto;
   flex: 1;
 }
@@ -279,18 +342,18 @@ $radius: 10px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 14px 18px;
+  padding: 14px 20px;
   border-top: 1px solid $border;
   background: #fafbfc;
 }
 
 // ---------------------------------------------------------------------------
-// 布局/文档中心/管理后台通用
+// 页面骨架
 // ---------------------------------------------------------------------------
 
 .page {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: $bg;
   color: $text;
 }
 
@@ -300,18 +363,25 @@ $radius: 10px;
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  background: #fff;
+  gap: 10px;
+  height: 52px;
+  padding: 0 20px;
+  background: $surface;
   border-bottom: 1px solid $border;
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
   color: $text;
   cursor: pointer;
   white-space: nowrap;
+  padding-right: 6px;
+
+  &:hover {
+    color: $primary;
+  }
 }
 
 .grow {
@@ -326,9 +396,9 @@ $radius: 10px;
 }
 
 .content {
-  max-width: 1120px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: 24px 24px 64px;
 }
 
 .sectionHeader {
@@ -341,98 +411,452 @@ $radius: 10px;
   h1,
   h2 {
     margin: 0;
-    font-size: 19px;
+    font-size: 18px;
     font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 
-.tabs {
+// 顶栏导航
+.nav {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: $radius;
-  background: #eef0f3;
-  margin-bottom: 18px;
-  width: fit-content;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
 }
 
-.tab {
-  padding: 7px 14px;
+.navItem {
+  padding: 5px 12px;
   border: none;
-  border-radius: 7px;
+  border-radius: $radius-sm;
   background: transparent;
   font-size: 13px;
-  color: $muted;
+  font-weight: 500;
+  color: $text-secondary;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: $surface-hover;
+    color: $text;
+  }
+}
+
+.navItemActive {
+  background: $primary-soft;
+  color: $primary;
+
+  &:hover {
+    background: $primary-soft;
+    color: $primary;
+  }
+}
+
+// 白板壳：顶栏 + 自适应画布区
+.appShell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.appBody {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// 本地白板左下角的「保存到我的文档」：避开 Drawnix 自身的四角工具栏
+.floatAction {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  box-shadow: $shadow;
+
+  :global(button) {
+    box-shadow: none;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 文档中心：侧栏 + 主区
+// ---------------------------------------------------------------------------
+
+.docsLayout {
+  display: flex;
+  align-items: stretch;
+  min-height: calc(100vh - 52px);
+}
+
+.sidebar {
+  width: 216px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  border-right: 1px solid $border;
+  background: $surface;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+}
+
+.sidebarNew {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  margin-bottom: 14px;
+  border: none;
+  border-radius: $radius;
+  background: $primary;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: $primary-hover;
+  }
+}
+
+.sidebarSection {
+  margin: 14px 8px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: $faint;
+  text-transform: uppercase;
+}
+
+.sidebarItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $text-secondary;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background: $surface-hover;
+    color: $text;
+  }
+}
+
+.sidebarItemActive {
+  background: $primary-soft;
+  color: $primary;
+  font-weight: 500;
+
+  &:hover {
+    background: $primary-soft;
+    color: $primary;
+  }
+}
+
+.sidebarItemText {
+  flex: 1;
+  @include ellipsis;
+}
+
+.sidebarCount {
+  font-size: 11px;
+  color: $faint;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebarFolderRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebarFolderToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: $faint;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  flex-shrink: 0;
+
+  &:hover {
+    background: $surface-active;
+    color: $text-secondary;
+  }
+}
+
+.sidebarFolderName {
+  @include ellipsis;
+}
+
+.docsMain {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 24px 56px;
+}
+
+.docsToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: $muted;
+  min-width: 0;
+}
+
+.breadcrumbItem {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
+
+  &:hover {
+    background: $surface-hover;
+    color: $text;
+  }
+}
+
+.breadcrumbCurrent {
+  padding: 2px 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text;
+  @include ellipsis;
+}
+
+.searchInput {
+  width: 220px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid $border-strong;
+  border-radius: $radius-sm;
+  font-size: 13px;
+  background: $surface;
+  @include focus-ring;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: $radius-sm;
+  background: $surface-active;
+  gap: 2px;
+}
+
+.segmentedItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: $muted;
+  font-size: 12px;
+  cursor: pointer;
 
   &:hover {
     color: $text;
   }
 }
 
-.tabActive {
-  background: #fff;
+.segmentedItemActive {
+  background: $surface;
   color: $text;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  box-shadow: $shadow-sm;
 }
 
+// 列表视图
+.listHeaderRow,
+.listRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 130px 130px 90px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr) 120px;
+  }
+}
+
+.listHeaderRow {
+  height: 36px;
+  font-size: 12px;
+  color: $muted;
+  border-bottom: 1px solid $border;
+
+  span:nth-child(n + 3) {
+    @media (max-width: 900px) {
+      display: none;
+    }
+  }
+}
+
+.listRow {
+  height: 46px;
+  border-bottom: 1px solid #f2f3f5;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: $surface-hover;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  > span {
+    @include ellipsis;
+  }
+
+  > span:nth-child(n + 3) {
+    font-size: 12px;
+    color: $muted;
+    font-variant-numeric: tabular-nums;
+
+    @media (max-width: 900px) {
+      display: none;
+    }
+  }
+}
+
+.listNameCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: $text;
+  font-weight: 500;
+}
+
+.docIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: $radius-sm;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.listRowActions {
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.listRow:hover .listRowActions {
+  opacity: 1;
+}
+
+// 卡片视图
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 12px;
 }
 
 .card {
   @include card;
-  padding: 16px;
+  padding: 14px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   position: relative;
 
   &:hover {
-    border-color: rgba($primary, 0.4);
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    border-color: $primary-border;
+    box-shadow: $shadow-sm;
   }
 }
 
 .cardIcon {
-  font-size: 28px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .cardTitle {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: $text;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 4px;
+  @include ellipsis;
+  margin-bottom: 6px;
 }
 
 .cardMeta {
   font-size: 12px;
   color: $muted;
+  font-variant-numeric: tabular-nums;
 }
 
 .cardMenu {
   position: absolute;
   top: 10px;
   right: 10px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.card:hover .cardMenu {
+  opacity: 1;
 }
 
 .empty {
-  padding: 60px 12px;
+  padding: 72px 16px;
   text-align: center;
   color: $muted;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 2;
 }
 
 .listWrap {
   @include card;
   overflow: hidden;
+}
+
+// 表格（管理后台）
+.tableWrap {
+  @include card;
+  overflow: auto;
 }
 
 .table {
@@ -444,7 +868,7 @@ $radius: 10px;
   td {
     padding: 10px 12px;
     text-align: left;
-    border-bottom: 1px solid $border;
+    border-bottom: 1px solid #f2f3f5;
     vertical-align: middle;
   }
 
@@ -453,6 +877,7 @@ $radius: 10px;
     font-weight: 500;
     color: $muted;
     background: #fafbfc;
+    white-space: nowrap;
   }
 
   tr:last-child td {
@@ -460,36 +885,33 @@ $radius: 10px;
   }
 }
 
-.tableWrap {
-  @include card;
-  overflow: auto;
-}
-
+// 标签
 .tag {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 1px 7px;
+  border-radius: 4px;
   font-size: 11px;
-  background: #eef2ff;
-  color: #3b54c8;
+  background: $primary-soft;
+  color: $primary;
   white-space: nowrap;
 }
 
 .tagMuted {
-  background: #f1f3f6;
+  background: $surface-active;
   color: $muted;
 }
 
 .tagDanger {
-  background: rgba($danger, 0.1);
+  background: $danger-soft;
   color: $danger;
 }
 
 .tagSuccess {
-  background: rgba(18, 183, 106, 0.12);
-  color: #087443;
+  background: rgba(0, 180, 42, 0.1);
+  color: #00831c;
 }
 
+// 管理后台统计
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -499,28 +921,31 @@ $radius: 10px;
 
 .statCard {
   @include card;
-  padding: 14px;
+  padding: 14px 16px;
 }
 
 .statValue {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
   color: $text;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .statLabel {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 12px;
   color: $muted;
 }
 
+// 分页 / 居中 / 下拉
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: 16px;
-  font-size: 13px;
+  margin-top: 18px;
+  font-size: 12px;
   color: $muted;
 }
 
@@ -530,7 +955,7 @@ $radius: 10px;
   justify-content: center;
   padding: 60px;
   color: $muted;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .dropdown {
@@ -539,29 +964,30 @@ $radius: 10px;
 
 .dropdownMenu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   right: 0;
   z-index: 50;
-  min-width: 160px;
+  min-width: 168px;
   @include card;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  border-radius: $radius;
+  box-shadow: $shadow;
   padding: 4px;
 }
 
 .dropdownItem {
   display: block;
   width: 100%;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   text-align: left;
   font-size: 13px;
   color: $text;
-  border-radius: 8px;
+  border-radius: $radius-sm;
   cursor: pointer;
 
   &:hover {
-    background: #f1f3f6;
+    background: $surface-hover;
   }
 }
 
@@ -578,77 +1004,340 @@ $radius: 10px;
   }
 }
 
+// 右键菜单：固定在点击位置，层级高于下拉与画布
+.contextMenu {
+  position: fixed;
+  z-index: 400;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid $border;
+  border-radius: $radius;
+  background: $surface;
+  box-shadow: $shadow;
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: $text;
+  cursor: pointer;
+
+  &:hover {
+    background: $surface-hover;
+  }
+}
+
+.contextMenuItemDanger {
+  color: $danger;
+}
+
 .avatar {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: $primary;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 // ---------------------------------------------------------------------------
-// 全局统一顶栏的导航区
+// 公开首页（导航型，参考腾讯文档首页的克制感）
 // ---------------------------------------------------------------------------
 
-.nav {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 4px;
+.landing {
+  min-height: 100vh;
+  background: $surface;
+  color: $text;
 }
 
-.navItem {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  color: $muted;
+.landingHeader {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  height: 60px;
+  padding: 0 32px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid $border;
+}
+
+.landingBrand {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.landingNav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  @media (max-width: 720px) {
+    display: none;
+  }
+}
+
+.landingNavItem {
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  border-radius: $radius-sm;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
 
   &:hover {
-    background: #f1f3f6;
+    background: $surface-hover;
     color: $text;
   }
 }
 
-.navItemActive {
-  background: rgba($primary, 0.1);
-  color: $primary;
-  font-weight: 600;
+.hero {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 76px 32px 40px;
+  text-align: center;
+}
 
-  &:hover {
-    background: rgba($primary, 0.16);
-    color: $primary;
+.heroEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  margin-bottom: 18px;
+  border: 1px solid $border;
+  border-radius: 999px;
+  font-size: 12px;
+  color: $text-secondary;
+  background: #fafbfc;
+}
+
+.heroTitle {
+  margin: 0 auto 14px;
+  max-width: 760px;
+  font-size: 40px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+
+  @media (max-width: 720px) {
+    font-size: 28px;
   }
 }
 
+.heroSub {
+  margin: 0 auto 28px;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.75;
+  color: $muted;
+}
+
+.heroActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.heroPrimary,
+.heroSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 22px;
+  border-radius: $radius;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.heroPrimary {
+  border: 1px solid $text;
+  background: $text;
+  color: #fff;
+
+  &:hover {
+    background: #000;
+  }
+}
+
+.heroSecondary {
+  border: 1px solid $border-strong;
+  background: $surface;
+  color: $text;
+
+  &:hover {
+    background: $surface-hover;
+  }
+}
+
+.entrySection {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px 32px 72px;
+}
+
+.entryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.entryCard {
+  @include card;
+  padding: 18px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: $primary-border;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.entryIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 12px;
+  border-radius: $radius;
+  background: $primary-soft;
+  color: $primary;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.entryTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.entryDesc {
+  font-size: 12px;
+  line-height: 1.7;
+  color: $muted;
+}
+
+.landingFooter {
+  border-top: 1px solid $border;
+  padding: 20px 32px;
+  font-size: 12px;
+  color: $faint;
+  text-align: center;
+}
+
 // ---------------------------------------------------------------------------
-// 首页（本地白板）：统一顶栏 + 自适应画布区
-//
-// #root 已是 height:100%，这里用 flex 列布局把顶栏下方剩余高度交给画布区。
-// Drawnix 的 `.drawnix { height: 100% }` 会跟着自适应；它自带的工具栏是相对
-// 画布区做 absolute 定位（top:36px 等），因此不会被顶栏压住。
+// 图片编辑
 // ---------------------------------------------------------------------------
 
-.appShell {
+.imageEditor {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 0;
+  background: $bg;
 }
 
-.appBody {
-  position: relative;
+.imageToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+  background: $surface;
+  border-bottom: 1px solid $border;
+}
+
+.imageTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text;
+}
+
+.imageBody {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+}
+
+.imageStage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+.imageCanvas {
+  position: relative;
+  box-shadow: $shadow;
+  flex-shrink: 0;
+}
+
+.imageLayer {
+  position: absolute;
+  cursor: move;
+  outline: 1px solid transparent;
+  touch-action: none;
+}
+
+.imageLayerActive {
+  outline: 1px solid $primary;
+  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.16);
+}
+
+.imageSidebar {
+  width: 268px;
+  flex-shrink: 0;
+  padding: 16px;
+  background: $surface;
+  border-left: 1px solid $border;
+  overflow: auto;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+}
+
+.imageGrid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.imageNumber {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: $faint;
+
+  input {
+    padding: 5px 6px;
+    font-size: 12px;
+  }
 }

@@ -1,0 +1,51 @@
+{
+	// Cloudflare Workers 配置模板。
+	//
+	// 用法：
+	//   cp wrangler.jsonc.example wrangler.jsonc
+	//   npx wrangler d1 create opendocs             -> 拿到 database_id 填到下面
+	//   npx wrangler r2 bucket create opendocs-files
+	//   npx wrangler d1 execute opendocs --remote --file=./migrations/0001_init.sql
+	//   npx wrangler d1 execute opendocs --remote --file=./migrations/0002_folders_invites.sql
+	//   npm run build:web && npx wrangler deploy
+	//
+	// wrangler.jsonc（去掉 .example 后缀的那份）已加入 .gitignore，不会被提交——
+	// 里面是账号内的真实资源 ID，对别人没有意义，也不该进版本库。
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "opendocs",
+	"main": "platform/cloudflare/worker.ts",
+	"compatibility_date": "2026-09-01",
+	"assets": {
+		// nx build web 的产物目录；部署前必须先跑一遍 build:web
+		"directory": "./dist/apps/web",
+		"binding": "ASSETS",
+		// 未命中静态文件时回退到 index.html（SPA 路由）。
+		// 不要再加 public/_redirects 的 `/* /index.html 200`：那条代理规则会和
+		// html_handling 的路径归一化互相触发，被 wrangler 判定为死循环拒绝部署。
+		"not_found_handling": "single-page-application",
+		// 只有 /api/* 才唤起 Worker；静态请求由资产层直接返回
+		"run_worker_first": ["/api/*"]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "opendocs",
+			"database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "opendocs-files"
+		}
+	],
+	// 注意：部署会用这里的 vars 覆盖控制台里同名的普通变量。
+	// 密码、API Key 请用 Secret：npx wrangler secret put ADMIN_PASSWORD
+	"vars": {
+		// 首个注册的账号自动成为管理员；上线后建议改为 "false"
+		"BOOTSTRAP_FIRST_ADMIN": "true",
+		"ALLOW_REGISTRATION": "true",
+		// 开启后注册必须填写有效邀请码
+		"INVITE_REQUIRED": "false"
+	}
+}

@@ -20,7 +20,8 @@ import {
 import { requireAuth } from '../middleware';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '../repos/sessions';
 import { normalizeEmail } from '../repos/users';
-import { toPublicUser, type UserRole } from '../repos/types';
+import { isInviteUsable } from '../repos/invites';
+import { toPublicUser, type InviteCodeRecord, type UserRole } from '../repos/types';
 import { buildResetPasswordEmail, buildVerifyEmail, sendEmail } from '../services/mail';
 import { verifyTurnstile } from '../services/turnstile';
 
@@ -91,6 +92,7 @@ authRoutes.post('/register', async (c) => {
     password?: unknown;
     displayName?: unknown;
     turnstileToken?: unknown;
+    inviteCode?: unknown;
   }>(c.req.raw);
 
   await requireTurnstile(c, body.turnstileToken);
@@ -99,8 +101,27 @@ authRoutes.post('/register', async (c) => {
   const password = requirePassword(body.password);
   const displayName = optionalString(body.displayName, 60);
 
+  // 邀请码：站点开启后必须提供有效邀请码；管理员代建账号不受此限制
+  const needInvite =
+    currentUser?.role !== 'admin' && (await c.get('settings').inviteRequired());
+  let invite: InviteCodeRecord | null = null;
+  if (needInvite) {
+    const code = optionalString(body.inviteCode, 64);
+    if (!code) throw badRequest('本站需要邀请码才能注册');
+    invite = await c.get('repos').invites.getByCode(code);
+    if (!invite || !isInviteUsable(invite)) {
+      throw badRequest('邀请码无效、已过期或已用完');
+    }
+  }
+
   const users = c.get('repos').users;
   if (await users.getByEmail(email)) throw conflict('该邮箱已注册');
+
+  // 先原子占用名额再建号：并发注册时不会把次数用超
+  if (invite) {
+    const consumed = await c.get('repos').invites.consume(invite.id);
+    if (!consumed) throw badRequest('邀请码已被用完');
+  }
 
   let role: UserRole = 'user';
   let emailVerified = false;

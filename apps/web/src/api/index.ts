@@ -1,10 +1,12 @@
 import { api, apiBlob } from './client';
 import type { DocumentContent } from './content-types';
 import type {
+  AdminInviteCode,
   AdminSettings,
   AdminStats,
   AdminUser,
   ApiDocument,
+  ApiFolder,
   ApiUser,
   DocumentAccess,
   DocumentMember,
@@ -36,6 +38,8 @@ export const authApi = {
     password: string;
     displayName?: string;
     turnstileToken?: string;
+    /** 站点开启邀请码注册时必填 */
+    inviteCode?: string;
   }) => api<{ user: ApiUser; emailSent: boolean }>('/auth/register', { method: 'POST', json }),
   logout: () => api<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   changePassword: (json: { currentPassword: string; newPassword: string }) =>
@@ -52,19 +56,37 @@ export const authApi = {
 
 export const documentApi = {
   list: (params: {
-    scope?: 'owned' | 'shared';
+    /** owned = 我的文档；shared = 与我共享；sent = 我的分享 */
+    scope?: 'owned' | 'shared' | 'sent';
     page?: number;
     pageSize?: number;
     q?: string;
     type?: DocumentType;
     trashed?: boolean;
+    /** 'root' 表示根目录（未归档）；具体 id 表示某个目录；不传表示不限目录 */
+    folderId?: string;
+    starred?: boolean;
+    recent?: boolean;
   }) =>
-    api<{ documents: ApiDocument[]; total: number; page: number; pageSize: number }>(
-      `/documents${query(params)}`
-    ),
+    api<{
+      documents: ApiDocument[];
+      total: number;
+      page: number;
+      pageSize: number;
+      /** 仅「最近删除」返回：保留天数 */
+      retentionDays?: number;
+    }>(`/documents${query(params)}`),
 
-  create: (json: { type: DocumentType; title?: string; content?: DocumentContent }) =>
-    api<{ document: ApiDocument }>('/documents', { method: 'POST', json }),
+  create: (json: {
+    type: DocumentType;
+    title?: string;
+    content?: DocumentContent;
+    folderId?: string | null;
+  }) => api<{ document: ApiDocument }>('/documents', { method: 'POST', json }),
+
+  /** 重命名 / 移动目录 / 收藏 统一走 PATCH */
+  update: (id: string, patch: { title?: string; folderId?: string | null; starred?: boolean }) =>
+    api<{ document: ApiDocument }>(`/documents/${id}`, { method: 'PATCH', json: patch }),
 
   get: (id: string) =>
     api<{ document: ApiDocument; content: DocumentContent; access: DocumentAccess }>(
@@ -196,10 +218,41 @@ export const adminApi = {
     siteName?: string;
     siteUrl?: string;
     allowRegistration?: boolean;
+    inviteRequired?: boolean;
+    trashRetentionDays?: number;
     resendApiKey?: string | null;
     resendFrom?: string;
     turnstileEnabled?: boolean;
     turnstileSiteKey?: string;
     turnstileSecretKey?: string | null;
   }) => api<AdminSettings>('/admin/settings', { method: 'PATCH', json: patch }),
+
+  invites: () => api<{ invites: AdminInviteCode[] }>('/admin/invites'),
+
+  createInvite: (json: {
+    code?: string;
+    maxUses?: number;
+    expiresAt?: string | null;
+    note?: string;
+  }) => api<{ invite: AdminInviteCode }>('/admin/invites', { method: 'POST', json }),
+
+  updateInvite: (
+    id: string,
+    patch: { disabled?: boolean; maxUses?: number; expiresAt?: string | null; note?: string }
+  ) => api<{ invite: AdminInviteCode }>(`/admin/invites/${id}`, { method: 'PATCH', json: patch }),
+
+  deleteInvite: (id: string) =>
+    api<{ ok: boolean }>(`/admin/invites/${id}`, { method: 'DELETE' }),
+};
+
+export const folderApi = {
+  list: () => api<{ folders: ApiFolder[] }>('/folders'),
+
+  create: (json: { name: string; parentId?: string | null }) =>
+    api<{ folder: ApiFolder }>('/folders', { method: 'POST', json }),
+
+  update: (id: string, patch: { name?: string; parentId?: string | null }) =>
+    api<{ folder: ApiFolder }>(`/folders/${id}`, { method: 'PATCH', json: patch }),
+
+  remove: (id: string) => api<{ ok: boolean }>(`/folders/${id}`, { method: 'DELETE' }),
 };

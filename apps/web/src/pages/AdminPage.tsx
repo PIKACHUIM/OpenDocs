@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
   adminApi,
+  type AdminInviteCode,
   type AdminSettings,
   type AdminStats,
   type AdminUser,
@@ -13,7 +14,7 @@ import { useAuth } from '../lib/auth';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
-type Tab = 'overview' | 'users' | 'documents' | 'settings';
+type Tab = 'overview' | 'users' | 'documents' | 'invites' | 'settings';
 
 const PAGE_SIZE = 20;
 
@@ -58,10 +59,20 @@ export function AdminPage() {
   const [documentQuery, setDocumentQuery] = useState('');
 
   const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [invites, setInvites] = useState<AdminInviteCode[]>([]);
+  const [inviteForm, setInviteForm] = useState({
+    code: '',
+    maxUses: 1,
+    expiresAt: '',
+    note: '',
+  });
+
   const [settingsForm, setSettingsForm] = useState<{
     siteName: string;
     siteUrl: string;
     allowRegistration: boolean;
+    inviteRequired: boolean;
+    trashRetentionDays: number;
     resendApiKey: string;
     resendFrom: string;
     turnstileEnabled: boolean;
@@ -107,6 +118,8 @@ export function AdminPage() {
         siteName: data.siteName,
         siteUrl: data.siteUrl,
         allowRegistration: data.allowRegistration,
+        inviteRequired: data.inviteRequired,
+        trashRetentionDays: data.trashRetentionDays,
         resendApiKey: '',
         resendFrom: data.resendFrom ?? '',
         turnstileEnabled: data.turnstileEnabled,
@@ -118,15 +131,25 @@ export function AdminPage() {
     }
   }, []);
 
+  const loadInvites = useCallback(async () => {
+    try {
+      const data = await adminApi.invites();
+      setInvites(data.invites);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '邀请码加载失败');
+    }
+  }, []);
+
   useEffect(() => {
     if (!isAdmin) return;
     setError(null);
     if (tab === 'overview') void loadStats();
     if (tab === 'users') void loadUsers(1, userQuery);
     if (tab === 'documents') void loadDocuments(1, documentQuery);
+    if (tab === 'invites') void loadInvites();
     if (tab === 'settings') void loadSettings();
     // 只在切换 tab 时按当前已有的搜索词触发一次加载
-  }, [tab, isAdmin, loadStats, loadUsers, loadDocuments, loadSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, isAdmin, loadStats, loadUsers, loadDocuments, loadInvites, loadSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (action: () => Promise<void>, successMessage?: string) => {
     setBusy(true);
@@ -177,6 +200,8 @@ export function AdminPage() {
         siteName: settingsForm.siteName,
         siteUrl: settingsForm.siteUrl,
         allowRegistration: settingsForm.allowRegistration,
+        inviteRequired: settingsForm.inviteRequired,
+        trashRetentionDays: settingsForm.trashRetentionDays,
         resendApiKey: settingsForm.resendApiKey ? settingsForm.resendApiKey : undefined,
         resendFrom: settingsForm.resendFrom,
         turnstileEnabled: settingsForm.turnstileEnabled,
@@ -188,6 +213,35 @@ export function AdminPage() {
       // 重新拉一次公开配置，让站点名称等改动立即生效（如标签页标题）
       await refresh();
     }, '设置已保存');
+  };
+
+  const createInvite = () =>
+    run(async () => {
+      await adminApi.createInvite({
+        code: inviteForm.code.trim() || undefined,
+        maxUses: inviteForm.maxUses,
+        // 以当天 23:59:59 作为截止，避免选「今天」却立刻过期
+        expiresAt: inviteForm.expiresAt
+          ? new Date(`${inviteForm.expiresAt}T23:59:59`).toISOString()
+          : null,
+        note: inviteForm.note.trim() || undefined,
+      });
+      setInviteForm({ code: '', maxUses: 1, expiresAt: '', note: '' });
+      await loadInvites();
+    }, '邀请码已创建');
+
+  const toggleInvite = (invite: AdminInviteCode) =>
+    run(async () => {
+      await adminApi.updateInvite(invite.id, { disabled: !invite.disabled });
+      await loadInvites();
+    }, invite.disabled ? '邀请码已启用' : '邀请码已停用');
+
+  const deleteInvite = (invite: AdminInviteCode) => {
+    if (!window.confirm(`删除邀请码「${invite.code}」？`)) return;
+    void run(async () => {
+      await adminApi.deleteInvite(invite.id);
+      await loadInvites();
+    }, '邀请码已删除');
   };
 
   return (
@@ -208,6 +262,7 @@ export function AdminPage() {
               ['overview', '概览'],
               ['users', '用户管理'],
               ['documents', '文档管理'],
+              ['invites', '邀请码'],
               ['settings', '系统设置'],
             ] as const
           ).map(([key, label]) => (
@@ -497,6 +552,141 @@ export function AdminPage() {
           </>
         ) : null}
 
+        {tab === 'invites' ? (
+          <div>
+            <div className={styles.listWrap} style={{ padding: 20, marginBottom: 16 }}>
+              <div className={styles.row} style={{ alignItems: 'flex-end', gap: 12 }}>
+                <div className={styles.field} style={{ marginBottom: 0, minWidth: 170 }}>
+                  <span className={styles.label}>邀请码（留空自动生成）</span>
+                  <input
+                    className={styles.input}
+                    placeholder="如 TEAM-2026"
+                    value={inviteForm.code}
+                    onChange={(event) =>
+                      setInviteForm({ ...inviteForm, code: event.target.value.toUpperCase() })
+                    }
+                  />
+                </div>
+                <div className={styles.field} style={{ marginBottom: 0, width: 110 }}>
+                  <span className={styles.label}>可用次数</span>
+                  <input
+                    className={styles.input}
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={inviteForm.maxUses}
+                    onChange={(event) =>
+                      setInviteForm({
+                        ...inviteForm,
+                        maxUses: Number.parseInt(event.target.value, 10) || 1,
+                      })
+                    }
+                  />
+                </div>
+                <div className={styles.field} style={{ marginBottom: 0, width: 170 }}>
+                  <span className={styles.label}>有效期（留空永久）</span>
+                  <input
+                    className={styles.input}
+                    type="date"
+                    value={inviteForm.expiresAt}
+                    onChange={(event) => setInviteForm({ ...inviteForm, expiresAt: event.target.value })}
+                  />
+                </div>
+                <div className={styles.field} style={{ marginBottom: 0, flex: 1, minWidth: 150 }}>
+                  <span className={styles.label}>备注</span>
+                  <input
+                    className={styles.input}
+                    placeholder="给谁用的"
+                    value={inviteForm.note}
+                    onChange={(event) => setInviteForm({ ...inviteForm, note: event.target.value })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.buttonPrimary}`}
+                  disabled={busy}
+                  onClick={createInvite}
+                >
+                  创建
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>邀请码</th>
+                    <th>用量</th>
+                    <th>有效期</th>
+                    <th>备注</th>
+                    <th>状态</th>
+                    <th style={{ textAlign: 'right' }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', color: '#86909c', padding: 32 }}>
+                        还没有邀请码
+                      </td>
+                    </tr>
+                  ) : (
+                    invites.map((invite) => (
+                      <tr key={invite.id}>
+                        <td>
+                          <button
+                            type="button"
+                            className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
+                            onClick={() => {
+                              void navigator.clipboard?.writeText(invite.code);
+                            }}
+                            title="点击复制"
+                          >
+                            {invite.code}
+                          </button>
+                        </td>
+                        <td>
+                          {invite.usedCount} / {invite.maxUses}
+                        </td>
+                        <td>{invite.expiresAt ? formatTime(invite.expiresAt) : '永久'}</td>
+                        <td>{invite.note ?? '-'}</td>
+                        <td>
+                          <span
+                            className={`${styles.tag} ${
+                              invite.usable ? styles.tagSuccess : styles.tagMuted
+                            }`}
+                          >
+                            {invite.usable ? '可用' : invite.disabled ? '已停用' : '已失效'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <button
+                            type="button"
+                            className={`${styles.button} ${styles.buttonSm}`}
+                            disabled={busy}
+                            onClick={() => toggleInvite(invite)}
+                          >
+                            {invite.disabled ? '启用' : '停用'}
+                          </button>{' '}
+                          <button
+                            type="button"
+                            className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
+                            disabled={busy}
+                            onClick={() => deleteInvite(invite)}
+                          >
+                            删除
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
         {tab === 'settings' && settingsForm ? (
           <div className={styles.listWrap} style={{ padding: 20, maxWidth: 560 }}>
             <div className={styles.field}>
@@ -523,6 +713,37 @@ export function AdminPage() {
               />
               允许新用户自助注册
             </label>
+            <label className={styles.checkboxRow} style={{ marginBottom: 16, marginTop: -8 }}>
+              <input
+                type="checkbox"
+                checked={settingsForm.inviteRequired}
+                onChange={(event) => setSettingsForm({ ...settingsForm, inviteRequired: event.target.checked })}
+              />
+              注册必须使用邀请码
+            </label>
+            <p className={styles.hint} style={{ marginTop: -8 }}>
+              开启后，注册页会要求填写有效邀请码；邀请码在「邀请码」标签页创建，可设置可用次数与有效期。
+            </p>
+
+            <div className={styles.field} style={{ marginTop: 12 }}>
+              <span className={styles.label}>删除文档保留时长（天，1–365）</span>
+              <input
+                className={styles.input}
+                type="number"
+                min={1}
+                max={365}
+                value={settingsForm.trashRetentionDays}
+                onChange={(event) =>
+                  setSettingsForm({
+                    ...settingsForm,
+                    trashRetentionDays: Number.parseInt(event.target.value, 10) || 30,
+                  })
+                }
+              />
+              <span className={styles.hint}>
+                「最近删除」中的文档超过该天数后，会在打开列表时自动彻底清理（含对象存储中的正文）。
+              </span>
+            </div>
 
             <h3 style={{ fontSize: 14, margin: '20px 0 10px' }}>Resend 邮件配置</h3>
             <div className={styles.field}>

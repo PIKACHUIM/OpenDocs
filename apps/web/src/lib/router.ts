@@ -4,22 +4,29 @@ import { useEffect, useMemo, useState } from 'react';
  * 极简路由：不引入 react-router，仅靠 pathname 前缀判断。
  * 配合 Workers/EdgeOne 的 SPA 回退（未命中回退到 index.html）即可工作。
  *
- *   /                     主页 = 文档管理（需登录）
- *   /documents            / 的别名，保留兼容
- *   /local                本地白板（纯 IndexedDB，不经过后端）
+ *   /                     公开首页（导航 + 产品介绍 + 各编辑器入口）
+ *   /documents            文档管理（需登录）
+ *   /local                本地白板（免登录，数据在 IndexedDB）
+ *   /try/:type            免登录试用某个编辑器（草稿存本地，可一键保存到账号）
  *   /login /register      认证
  *   /forgot-password      发起找回密码
  *   /reset-password       凭 token 设置新密码（?token=）
  *   /verify-email         凭 token 验证邮箱（?token=）
- *   /d/:id                打开某个文档（按其 type 分发到对应编辑器）
+ *   /d/:id                打开某个云端文档
  *   /s/:token             通过分享链接打开（无需登录）
  *   /admin                管理后台
  *
- * 除下面 PUBLIC_ROUTE_KINDS 列出的路由外，其余页面一律要求已登录，
+ * 除 PUBLIC_ROUTE_KINDS 列出的路由外，其余页面要求已登录，
  * 未登录会被重定向到 /login?redirect=<原地址>。
  */
+
+export type TryType = 'mindmap' | 'markdown' | 'word' | 'excel' | 'ppt';
+
 export type Route =
+  | { kind: 'home' }
   | { kind: 'local' }
+  | { kind: 'image' }
+  | { kind: 'try'; type: TryType }
   | { kind: 'login' }
   | { kind: 'register' }
   | { kind: 'forgot-password' }
@@ -31,21 +38,31 @@ export type Route =
   | { kind: 'admin' }
   | { kind: 'notFound'; path: string };
 
+const TRY_TYPES: TryType[] = ['mindmap', 'markdown', 'word', 'excel', 'ppt'];
+
 function getQueryToken(search: string): string {
   return new URLSearchParams(search).get('token') ?? '';
 }
 
 export function parseRoute(pathname: string, search = ''): Route {
   const path = pathname.replace(/\/+$/, '') || '/';
-  // 主页就是文档管理；/documents 作为别名继续可用
-  if (path === '/' || path === '/documents') return { kind: 'documents' };
+
+  if (path === '/') return { kind: 'home' };
+  if (path === '/documents') return { kind: 'documents' };
   if (path === '/local') return { kind: 'local' };
+  if (path === '/image') return { kind: 'image' };
   if (path === '/login') return { kind: 'login' };
   if (path === '/register') return { kind: 'register' };
   if (path === '/forgot-password') return { kind: 'forgot-password' };
   if (path === '/reset-password') return { kind: 'reset-password', token: getQueryToken(search) };
   if (path === '/verify-email') return { kind: 'verify-email', token: getQueryToken(search) };
   if (path === '/admin') return { kind: 'admin' };
+
+  const tryMatch = /^\/try\/([^/]+)$/.exec(path);
+  if (tryMatch) {
+    const type = decodeURIComponent(tryMatch[1]) as TryType;
+    if (TRY_TYPES.includes(type)) return { kind: 'try', type };
+  }
 
   const docMatch = /^\/d\/([^/]+)$/.exec(path);
   if (docMatch) return { kind: 'document', id: decodeURIComponent(docMatch[1]) };
@@ -58,6 +75,10 @@ export function parseRoute(pathname: string, search = ''): Route {
 
 /** 无需登录即可访问的路由。其余一律要求登录。 */
 const PUBLIC_ROUTE_KINDS: ReadonlySet<Route['kind']> = new Set<Route['kind']>([
+  'home',
+  'local',
+  'image',
+  'try',
   'login',
   'register',
   'forgot-password',

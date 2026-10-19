@@ -7,6 +7,7 @@ import { adminRoutes } from './routes/admin';
 import { assetRoutes } from './routes/assets';
 import { authRoutes } from './routes/auth';
 import { documentRoutes } from './routes/documents';
+import { folderRoutes } from './routes/folders';
 import { shareRoutes } from './routes/share';
 
 export type { ApiBindings, ApiEnv, ApiVariables, Runtime } from './context';
@@ -58,6 +59,7 @@ export function createApp() {
 
   app.route('/api/auth', authRoutes);
   app.route('/api/documents', documentRoutes);
+  app.route('/api/folders', folderRoutes);
   app.route('/api/share', shareRoutes);
   app.route('/api/assets', assetRoutes);
   app.route('/api/admin', adminRoutes);

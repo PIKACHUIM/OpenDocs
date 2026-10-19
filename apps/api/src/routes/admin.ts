@@ -5,6 +5,7 @@ import { hashPassword, type PasswordHash } from '../lib/crypto';
 import { getText } from '../files';
 import { badRequest, conflict, json, notFound, readJson, requireString } from '../lib/http';
 import { requireAdmin } from '../middleware';
+import { toPublicInviteCode } from '../repos/types';
 import { paging } from '../db/sql';
 import { SETTINGS_KEYS } from '../services/settings';
 import { emptyContentFor } from '../lib/document-content';
@@ -186,6 +187,8 @@ adminRoutes.patch('/settings', async (c) => {
     siteName?: unknown;
     siteUrl?: unknown;
     allowRegistration?: unknown;
+    inviteRequired?: unknown;
+    trashRetentionDays?: unknown;
     resendApiKey?: unknown;
     resendFrom?: unknown;
     turnstileEnabled?: unknown;
@@ -210,6 +213,19 @@ adminRoutes.patch('/settings', async (c) => {
   if (typeof body.allowRegistration === 'boolean') {
     entries[SETTINGS_KEYS.allowRegistration] = body.allowRegistration ? 'true' : 'false';
   }
+  if (typeof body.inviteRequired === 'boolean') {
+    entries[SETTINGS_KEYS.inviteRequired] = body.inviteRequired ? 'true' : 'false';
+  }
+  if (body.trashRetentionDays !== undefined) {
+    const days =
+      typeof body.trashRetentionDays === 'number'
+        ? body.trashRetentionDays
+        : Number.parseInt(String(body.trashRetentionDays), 10);
+    if (!Number.isFinite(days) || days < 1 || days > 365) {
+      throw badRequest('删除文档保留时长需在 1–365 天之间');
+    }
+    entries[SETTINGS_KEYS.trashRetentionDays] = String(Math.floor(days));
+  }
   // 密钥字段：传空字符串视为「清除」，避免管理员不小心把真实密钥存成空串
   if (body.resendApiKey !== undefined) {
     const value = body.resendApiKey;
@@ -231,4 +247,95 @@ adminRoutes.patch('/settings', async (c) => {
   for (const key of removals) await settings.remove(key);
 
   return json(await c.get('settings').adminConfig());
+});
+
+// ---------------------------------------------------------------------------
+// 邀请码管理
+// ---------------------------------------------------------------------------
+
+adminRoutes.get('/invites', async (c) => {
+  const invites = await c.get('repos').invites.list();
+  return json({ invites: invites.map((item) => toPublicInviteCode(item)) });
+});
+
+adminRoutes.post('/invites', async (c) => {
+  const body = await readJson<{
+    code?: unknown;
+    maxUses?: unknown;
+    expiresAt?: unknown;
+    note?: unknown;
+  }>(c.req.raw);
+
+  const maxUses =
+    typeof body.maxUses === 'number' && Number.isFinite(body.maxUses)
+      ? Math.min(10_000, Math.max(1, Math.floor(body.maxUses)))
+      : 1;
+
+  let expiresAt: string | null = null;
+  if (typeof body.expiresAt === 'string' && body.expiresAt.trim()) {
+    const parsed = new Date(body.expiresAt.trim());
+    if (Number.isNaN(parsed.getTime())) throw badRequest('有效期格式不正确');
+    expiresAt = parsed.toISOString();
+  }
+
+  let code: string | undefined;
+  if (typeof body.code === 'string' && body.code.trim()) {
+    code = body.code.trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,32}$/.test(code)) {
+      throw badRequest('邀请码只能由字母、数字、连字符组成，长度 4-32');
+    }
+    if (await c.get('repos').invites.getByCode(code)) throw conflict('该邀请码已存在');
+  }
+
+  const invite = await c.get('repos').invites.create({
+    code,
+    maxUses,
+    expiresAt,
+    note: typeof body.note === 'string' ? body.note.slice(0, 200) : null,
+    createdBy: c.get('user')!.id,
+  });
+
+  return json({ invite: toPublicInviteCode(invite) }, 201);
+});
+
+adminRoutes.patch('/invites/:id', async (c) => {
+  const body = await readJson<{
+    disabled?: unknown;
+    maxUses?: unknown;
+    expiresAt?: unknown;
+    note?: unknown;
+  }>(c.req.raw);
+
+  const patch: {
+    disabled?: boolean;
+    maxUses?: number;
+    expiresAt?: string | null;
+    note?: string | null;
+  } = {};
+
+  if (typeof body.disabled === 'boolean') patch.disabled = body.disabled;
+  if (typeof body.maxUses === 'number' && Number.isFinite(body.maxUses)) {
+    patch.maxUses = Math.min(10_000, Math.max(1, Math.floor(body.maxUses)));
+  }
+  if (body.expiresAt !== undefined) {
+    if (body.expiresAt === null || body.expiresAt === '') {
+      patch.expiresAt = null;
+    } else if (typeof body.expiresAt === 'string') {
+      const parsed = new Date(body.expiresAt);
+      if (Number.isNaN(parsed.getTime())) throw badRequest('有效期格式不正确');
+      patch.expiresAt = parsed.toISOString();
+    }
+  }
+  if (typeof body.note === 'string') patch.note = body.note.slice(0, 200);
+
+  const updated = await c.get('repos').invites.patch(c.req.param('id'), patch);
+  if (!updated) throw notFound('邀请码不存在');
+  return json({ invite: toPublicInviteCode(updated) });
+});
+
+adminRoutes.delete('/invites/:id', async (c) => {
+  const existing = await c.get('repos').invites.getById(c.req.param('id'));
+  if (!existing) throw notFound('邀请码不存在');
+  await c.get('repos').invites.remove(existing.id);
+  return json({ ok: true });
 });

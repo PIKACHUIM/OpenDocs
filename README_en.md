@@ -1,148 +1,146 @@
-<p align="center">
-  <picture style="width: 320px">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" />
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h_dark.svg?raw=true" />
-    <img src="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" width="360" alt="Drawnix logo and name" />
-  </picture>
-</p>
 <div align="center">
-  <h2>
-    Open-source whiteboard tool (SaaS), an all-in-one collaborative canvas that includes mind mapping, flowcharts, freehand and more.
-  <br />
-  </h2>
+
+# OpenDocs
+
+**A self-hostable online document suite**
+
+Whiteboard / mind map · Markdown · Word · Excel · Presentations
+One account, one folder tree, one sharing model — deploy once.
+
+[![Docs](https://img.shields.io/badge/docs-online-3370ff)](https://docs.opendocs.dev)
+[![Deploy](https://img.shields.io/badge/deploy-Cloudflare%20Workers-f38020)](docs/guide/deploy.md)
+[![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](package.json)
+
+[简体中文](README.md) · [English](README_en.md) · [Documentation](https://docs.opendocs.dev)
+
 </div>
 
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/product_showcase/case-2.png" alt="Product showcase" width="80%" />
-    </a>
-    <figcaption>
-      <p align="center">
-      Whiteboard with mind mapping, flowcharts, freehand drawing and more
-      </p>
-    </figcaption>
-  </figure>
-  <a href="https://hellogithub.com/repository/plait-board/drawnix" target="_blank">
-    <picture style="width: 250">
-      <source media="(prefers-color-scheme: light)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" />
-      <source media="(prefers-color-scheme: dark)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=dark" />
-      <img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54"/>
-    </picture>
-  </a>
+---
 
-  <br />
+## What it is
 
-  <a href="https://trendshift.io/repositories/13979" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13979" alt="plait-board%2Fdrawnix | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+OpenDocs puts drawing and writing in one workspace: whiteboards and mind maps next to documents,
+spreadsheets and slide decks — without maintaining a separate account and sharing model for each.
 
-  <br />
+The frontend is a static SPA. The backend is a Hono app that runs on edge runtimes.
+All data lives in your own Cloudflare (or EdgeOne) account; nothing goes through a third party.
 
-  <a href="https://atomgit.com/plait-board/drawnix" target="_blank"><img src="https://atomgit.com/plait-board/drawnix/star/new_badge.svg" alt="AtomGit G-Star" height="54" /></a>
-</div>
+> The whiteboard is built on the open-source [Drawnix](https://github.com/plait-board/drawnix) core
+> (`packages/drawnix`, MIT). OpenDocs adds accounts, cloud storage, folders, sharing and an admin console.
 
-[*中文*](https://github.com/plait-board/drawnix/blob/develop/README.md)
+---
 
 ## Features
 
-- 💯 Free and Open Source
-- ⚒️ Mind Maps and Flowcharts
-- 🖌 Freehand
-- 😀 Image Support
-- 🚀 Plugin-based Architecture - Extensible
-- 🖼️ 📃 Export to PNG, JPG, JSON(.drawnix)
-- 💾 Auto-save (Browser Storage)
-- ⚡ Edit Features: Undo, Redo, Copy, Paste, etc.
-- 🌌 Infinite Canvas: Zoom, Pan
-- 🎨 Theme Support
-- 📱 Mobile-friendly
-- 📈 Support mermaid syntax conversion to flowchart
-- ✨ Support markdown text conversion to mind map（New 🔥🔥🔥）
+| Area | Capability |
+| --- | --- |
+| **Document types** | Whiteboard / mind map, Markdown, Word, Excel, Presentations, Image editor |
+| **Accounts** | Email sign-up/sign-in, PBKDF2 hashing, HttpOnly sessions, email verification, password reset |
+| **Invite-only** | Usage limit, expiry, enable/disable, concurrency-safe redemption |
+| **Documents** | Create, rename, duplicate, move, star, search, pagination, list/card views, context menu |
+| **Folders** | Multi-level tree; deleting a folder re-parents documents instead of losing them |
+| **Sharing** | Link sharing (view/edit), invite collaborators by email, "Shared by me" / "Shared with me" |
+| **Trash** | Configurable retention (1–365 days), auto-purged after expiry |
+| **Guest mode** | Try any editor without signing in; drafts stay local and can be saved to an account |
+| **Admin** | Users, documents, invite codes, site settings (name, registration, mail, captcha) |
+| **Export** | `.drawnix`, Markdown, PDF, `.docx`, `.xlsx`, `.pptx`, PNG |
 
-
-## About the Name
-
-***Drawnix*** is born from the interweaving of ***Draw*** and ***Phoenix***, a fusion of artistic inspiration.
-
-The *Phoenix* symbolizes endless creativity, while *Draw* represents humanity's most fundamental form of expression. Here, each creation is an artistic rebirth, every stroke a renaissance of inspiration.
-
-Like a Phoenix, creativity must rise from the flames to be reborn, and ***Drawnix*** stands as the guardian of both technical and creative fire.
-
-*Draw Beyond, Rise Above.*
-
-## About Plait Drawing Framework
-
-*Drawnix* is positioned as an out-of-the-box, *open-source*, and free tool product. It is built on top of the *Plait* framework, which is our company's *open-source* drawing framework representing significant technical accumulation in knowledge base products([PingCode Wiki](https://pingcode.com/product/wiki?utm_source=drawnix)).
-
-
-*Drawnix* uses a *plugin architecture*, which is technically more complex than the previously mentioned *open-source* tools. However, this *plugin architecture* has its advantages: it supports multiple *UI frameworks* (*Angular*, *React*), integrates with different *rich text frameworks* (currently only supporting *Slate* framework), enables better business layer separation in development, allows development of various fine-grained reusable plugins, and can expand to more whiteboard application scenarios.
-
-## Repository Structure
+## Stack
 
 ```
-drawnix/
-├── apps/
-│   ├── web                   # drawnix.com
-│   │    └── index.html       # HTML
-├── dist/                     # Build artifacts
-├── packages/
-│   └── drawnix/              # Whiteboard application core
-│   └── react-board/          # Whiteboard react view layer
-│   └── react-text/           # Text rendering module
-├── package.json
-├── ...
-└── README.md
-└── README_en.md
-
+Frontend  React 19 · Vite · Nx · CSS Modules (no UI framework)
+Backend   Hono · TypeScript
+Data      Cloudflare D1 (metadata) + R2 / EdgeOne Blob (content & images)
+Deploy    Workers Static Assets / EdgeOne Cloud Functions
+Docs      VitePress + GitHub Actions
 ```
 
-## Try It Out
+## Architecture
 
-*https://drawnix.com* is the minimal application of *drawnix*.
-
-I will be iterating frequently on *drawnix.com* until the release of the *Dawn* version.
-
-
-## Development
-
+```mermaid
+flowchart LR
+  B["Browser<br/>React SPA"] -->|static assets| A["Asset layer<br/>CDN / Static Assets"]
+  B -->|fetch /api/*| W["Edge function<br/>Hono"]
+  W --> D[("D1<br/>users / sessions / metadata / folders / invites")]
+  W --> R[("R2 / Blob<br/>document content / images")]
 ```
+
+- Static requests never enter the function: `run_worker_first` only covers `/api/*`
+- Content is not stored in the database: `documents` keeps `content_key`, avoiding D1's 1 MB row limit
+- Business code is platform-agnostic: the same `apps/api` runs on Workers, EdgeOne and local Node
+
+See [architecture](docs/architecture.md) for details.
+
+---
+
+## Quick start
+
+```bash
 npm install
 
-npm run start
+npm run dev:api     # backend on :8788 (node:sqlite)
+npm start           # frontend on :7200
 ```
 
-## Docker
+Open `http://localhost:7200`. **The first registered account becomes the administrator.**
+
+```bash
+npm run test:api        # end-to-end smoke tests (no cloud resources needed)
+npm run typecheck:api
+```
+
+## Deploy
+
+```bash
+cp wrangler.jsonc.example wrangler.jsonc   # fill in your database_id
+
+npx wrangler d1 create opendocs
+npx wrangler r2 bucket create opendocs-files
+npx wrangler d1 execute opendocs --remote --file=./migrations/0001_init.sql
+npx wrangler d1 execute opendocs --remote --file=./migrations/0002_folders_invites.sql
+
+npm run deploy:cf
+```
+
+`wrangler.jsonc` is gitignored; only the template is committed.
+For EdgeOne, see the [deployment guide](docs/guide/deploy.md).
+
+## Documentation
+
+The full guides are written in Chinese and published with VitePress:
+
+```bash
+npm run docs:dev      # local preview
+npm run docs:build    # output: docs/.vitepress/dist
+```
+
+Docs are built and published by `.github/workflows/docs.yml` (GitHub Pages),
+with a custom domain pinned via `docs/public/CNAME` (default `docs.opendocs.dev`).
+
+## Repository layout
 
 ```
-docker pull pubuzhixing/drawnix:latest
+apps/web           React SPA
+apps/api           Hono backend (platform-agnostic)
+packages/drawnix   whiteboard core (upstream)
+platform/          Cloudflare / EdgeOne / Node adapters
+migrations/        D1 migrations
+docs/              VitePress documentation site
+scripts/           dev, build, smoke tests
 ```
 
-## Dependencies
+## Roadmap
 
-- [plait](https://github.com/worktile/plait) - Open source drawing framework
-- [slate](https://github.com/ianstormtaylor/slate) - Rich text editor framework
-- [floating-ui](https://github.com/floating-ui/floating-ui) - An awesome library for creating floating UI elements
-
-
-## Contributing
-
-Any form of contribution is welcome:
-
-Before opening an issue or pull request, please read the [Contributing Guide](CONTRIBUTING.md).
-
-- Report bugs
-
-- Contribute code
-
-## Thank you for supporting
-
-Special thanks to the company for its strong support for open source projects, and also to the friends who contributed code and provided suggestions to this project.
-
-<p align="left">
-  <a href="https://pingcode.com?utm_source=drawnix" target="_blank">
-      <img src="https://cdn-aliyun.pingcode.com/static/site/img/pingcode-logo.4267e7b.svg" width="120" alt="PingCode" />
-  </a>
-</p>
+- [x] Five document types, accounts, folders, sharing, admin console
+- [x] Invite-only registration, trash retention policy
+- [x] Guest mode with local drafts saved to an account
+- [x] Image editor (background, text, shapes, images, layers, PNG export)
+- [ ] Image editor: asset library and templates
+- [ ] Full Word / Excel editing via Univer
+- [ ] Presentation free-form canvas and slideshow
+- [ ] Real-time collaboration (CRDT / Durable Objects)
 
 ## License
 
-[MIT License](https://github.com/plait-board/drawnix/blob/master/LICENSE)
+[MIT](LICENSE). The Drawnix whiteboard core is MIT-licensed, copyright its original authors.

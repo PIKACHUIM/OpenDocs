@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ApiError, authApi } from '../api';
+import { ApiError, authApi, documentApi, emptyContentFor, type DocumentType } from '../api';
 import { navigate, useRoute } from '../lib/router';
 import { useAuth } from '../lib/auth';
 import { Dropdown, DropdownItem } from './Dropdown';
@@ -19,17 +19,35 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const navItem = (active: boolean) =>
     active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem;
 
+  /** 顶栏快捷新建：已登录直接建云端文档，未登录进试用模式 */
+  const quickCreate = async (type: DocumentType) => {
+    if (!user) {
+      navigate(`/try/${type}`);
+      return;
+    }
+    try {
+      const data = await documentApi.create({
+        type,
+        title: '未命名文档',
+        content: emptyContentFor(type),
+      });
+      navigate(`/d/${data.document.id}`);
+    } catch (error) {
+      window.alert(error instanceof ApiError ? error.message : '创建文档失败');
+    }
+  };
+
   return (
     <div className={styles.topbar}>
-      <span className={styles.brand} onClick={() => navigate('/')}>
-        {config?.siteName ?? 'Drawnix'}
+      <span className={styles.brand} onClick={() => navigate(user ? '/documents' : '/')}>
+        {config?.siteName ?? 'OpenDocs'}
       </span>
 
       <nav className={styles.nav}>
         <button
           type="button"
           className={navItem(route.kind === 'documents')}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/documents')}
         >
           文档管理
         </button>
@@ -38,7 +56,19 @@ export function TopBar({ children }: { children?: ReactNode }) {
           className={navItem(route.kind === 'local')}
           onClick={() => navigate('/local')}
         >
-          本地白板
+          思维导图
+        </button>
+        <button type="button" className={styles.navItem} onClick={() => quickCreate('word')}>
+          Word
+        </button>
+        <button type="button" className={styles.navItem} onClick={() => quickCreate('excel')}>
+          Excel
+        </button>
+        <button type="button" className={styles.navItem} onClick={() => quickCreate('markdown')}>
+          Markdown
+        </button>
+        <button type="button" className={styles.navItem} onClick={() => navigate('/image')}>
+          图片编辑
         </button>
       </nav>
 

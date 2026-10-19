@@ -33,7 +33,34 @@ export interface ApiDocument {
   deletedAt: string | null;
   linkShared: boolean;
   linkMode: LinkShareMode | null;
+  /** 所属目录；null 表示未归档 */
+  folderId: string | null;
+  starred: boolean;
+  lastOpenedAt: string | null;
   myRole?: 'owner' | DocumentMemberRole;
+}
+
+/** 目录（文件夹），parentId 为 null 表示根级 */
+export interface ApiFolder {
+  id: string;
+  parentId: string | null;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 邀请码 */
+export interface AdminInviteCode {
+  id: string;
+  code: string;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string | null;
+  disabled: boolean;
+  note: string | null;
+  createdAt: string;
+  /** 由服务端派生：未禁用、未过期、未用完 */
+  usable: boolean;
 }
 
 export interface DocumentMember {
@@ -47,6 +74,8 @@ export interface DocumentMember {
 export interface PublicConfig {
   siteName: string;
   allowRegistration: boolean;
+  /** 开启后注册必须填写邀请码 */
+  inviteRequired: boolean;
   turnstileEnabled: boolean;
   turnstileSiteKey: string | null;
 }
@@ -55,6 +84,9 @@ export interface AdminSettings {
   siteName: string;
   siteUrl: string;
   allowRegistration: boolean;
+  inviteRequired: boolean;
+  /** 「最近删除」保留天数，1–365 */
+  trashRetentionDays: number;
   resendApiKeySet: boolean;
   resendApiKeyMasked: string | null;
   resendFrom: string | null;

@@ -34,6 +34,10 @@ export interface ApiBindings {
   SITE_NAME?: string;
   SITE_URL?: string;
   ALLOW_REGISTRATION?: string;
+  /** 默认 false：开启后注册必须提供有效邀请码 */
+  INVITE_REQUIRED?: string;
+  /** 「最近删除」保留天数，默认 30，上限 365 */
+  TRASH_RETENTION_DAYS?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   TURNSTILE_SITE_KEY?: string;

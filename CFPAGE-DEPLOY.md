@@ -1,18 +1,20 @@
-# Drawnix 部署指南
+# OpenDocs 部署指南
 
-Drawnix 的前端产物是**纯静态**的（`dist/apps/web`），后端是一个 Hono 应用，
+> 这是本仓库的详细部署笔记；文档站里有结构更清晰的版本：[部署方式](./docs/guide/deploy.md)。
+
+OpenDocs 的前端产物是**纯静态**的（`dist/apps/web`），后端是一个 Hono 应用，
 可以被 Cloudflare Workers（Static Assets）承载，也可以被 EdgeOne Cloud Functions 承载。
 
 因此有三种部署形态，按需选择：
 
 | 形态 | 说明 | 需要后端吗 |
 | --- | --- | --- |
-| A. 纯静态 | 只托管 `dist/apps/web`，`/` 的本地白板存在浏览器 IndexedDB | 不需要 |
-| B. Cloudflare Workers + D1 + R2 | 账号体系 + 在线文档中心（思维导图/Markdown/Word/Excel/PPT）+ 分享协作 + 管理后台 | 需要 |
+| A. 纯静态 | 只托管 `dist/apps/web`，`/local` 的本地白板存在浏览器 IndexedDB | 不需要 |
+| B. Cloudflare Workers + D1 + R2 | 账号体系 + 文档管理（白板/Markdown/Word/Excel/PPT）+ 目录 + 分享协作 + 管理后台 | 需要 |
 | C. EdgeOne Pages + D1(HTTP API) + Blob | 同上，面向国内访问 | 需要 |
 
-三种形态的前端是同一份产物：**没有后端时 `/` 的本地白板仍可用**，
-`/documents`、`/d/:id`、`/admin` 等云端功能会因接口不可用而报错，不影响 `/` 的本地使用。
+三种形态的前端是同一份产物：**没有后端时首页与 `/local` 仍可用**，
+`/documents`、`/d/:id`、`/admin` 等云端功能会因接口不可用而报错。
 
 > **为什么是 Workers 而不是 Pages？** Cloudflare 官方在 2025-04 的博客
 > 《Your frontend, backend, and database — now in one Cloudflare Worker》里明确表态：

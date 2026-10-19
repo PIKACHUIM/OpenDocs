@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Drawnix, DrawnixToolState, ColorScheme, ColorTheme } from '@drawnix/drawnix';
 import localforage from 'localforage';
+import { ApiError, documentApi, type MindmapContent } from '../api';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { navigate, requiresAuth, useRoute } from '../lib/router';
 import { AdminPage } from '../pages/AdminPage';
 import { DocumentPage } from '../pages/DocumentPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
+import { ImageEditorPage } from '../pages/ImageEditorPage';
+import { LandingPage } from '../pages/LandingPage';
+import { LocalDraftPage } from '../pages/LocalDraftPage';
 import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { ResetPasswordPage } from '../pages/ResetPasswordPage';
@@ -41,12 +45,16 @@ localforage.config({
 });
 
 /**
- * `/` 继续保持纯本地白板体验，与接入账号体系/云端文档之前完全一致——
- * 不登录也能用，数据只存在浏览器 IndexedDB 里。
- * 云端的「文档中心」「思维导图/Markdown/Word/Excel/PPT」在 /documents 与 /d/:id 下，
- * 二者是两条独立的入口，互不影响。
+ * 本地白板（`/local`）。
+ *
+ * 编辑过程完全离线：内容写 IndexedDB，不产生网络请求，未登录也能用。
+ * 另有「保存到我的文档」把当前画布转成一份云端文档（mindmap 类型），
+ * 之后在 `/d/:id` 里继续编辑——本地与云端共用同一个 Drawnix 编辑器，
+ * 差别只在存储位置，不再有两条割裂的链路。
  */
 function LocalWhiteboard() {
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
   const [value, setValue] = useState<AppValue>({ children: [] });
   const [initialToolState, setInitialToolState] = useState<Partial<DrawnixToolState>>();
   const [preference, setPreference] = useState<MainBoardPreference>({
@@ -97,10 +105,49 @@ function LocalWhiteboard() {
     });
   }, []);
 
+  /** 把当前画布另存为一份云端文档 */
+  const saveToAccount = async () => {
+    if (!user) {
+      navigate('/login?redirect=%2Flocal');
+      return;
+    }
+    setSaving(true);
+    try {
+      // 本地白板与云端 mindmap 文档结构一致（elements / viewport / theme），可直接转换
+      const content = {
+        elements: value.children ?? [],
+        viewport: value.viewport,
+        theme: value.theme,
+      } as unknown as MindmapContent;
+
+      const data = await documentApi.create({
+        type: 'mindmap',
+        title: '未命名白板',
+        content,
+      });
+      navigate(`/d/${data.document.id}`);
+    } catch (error) {
+      window.alert(error instanceof ApiError ? error.message : '保存失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!loaded) return null;
 
   return (
-    <Drawnix
+    <>
+      <div className={styles.floatAction}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonPrimary}`}
+          disabled={saving}
+          onClick={saveToAccount}
+        >
+          {saving ? '保存中…' : user ? '保存到我的文档' : '登录后保存到云端'}
+        </button>
+      </div>
+      <Drawnix
       value={value.children as never}
       viewport={value.viewport as never}
       theme={value.theme as never}
@@ -127,8 +174,9 @@ function LocalWhiteboard() {
       onToolStateChange={(toolState) => {
         void localforage.setItem(MAIN_BOARD_TOOL_STATE_KEY, toolState);
       }}
-      tutorial={tutorial}
-    />
+        tutorial={tutorial}
+      />
+    </>
   );
 }
 
@@ -167,6 +215,12 @@ function Router() {
   }
 
   switch (route.kind) {
+    case 'home':
+      return <LandingPage />;
+    case 'image':
+      return <ImageEditorPage />;
+    case 'try':
+      return <LocalDraftPage key={`try:${route.type}`} type={route.type} />;
     case 'local':
       // 本地白板（/local）：顶栏固定高度，画布区自适应剩余高度
       return (

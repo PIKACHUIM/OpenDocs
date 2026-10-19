@@ -17,12 +17,13 @@ interface AuthContextValue {
   isAdmin: boolean;
   refresh: () => Promise<void>;
   login: (email: string, password: string, turnstileToken?: string) => Promise<ApiUser>;
-  register: (
-    email: string,
-    password: string,
-    displayName?: string,
-    turnstileToken?: string
-  ) => Promise<{ user: ApiUser; emailSent: boolean }>;
+  register: (input: {
+    email: string;
+    password: string;
+    displayName?: string;
+    turnstileToken?: string;
+    inviteCode?: string;
+  }) => Promise<{ user: ApiUser; emailSent: boolean }>;
   logout: () => Promise<void>;
 }
 
@@ -66,8 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (email: string, password: string, displayName?: string, turnstileToken?: string) => {
-      const data = await authApi.register({ email, password, displayName, turnstileToken });
+    async (input: {
+      email: string;
+      password: string;
+      displayName?: string;
+      turnstileToken?: string;
+      inviteCode?: string;
+    }) => {
+      const data = await authApi.register(input);
       setUser(data.user);
       return data;
     },

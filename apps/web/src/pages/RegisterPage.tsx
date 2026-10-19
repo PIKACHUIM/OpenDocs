@@ -10,6 +10,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,12 +57,13 @@ export function RegisterPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await register(
-        email.trim(),
+      const result = await register({
+        email: email.trim(),
         password,
-        displayName.trim() || undefined,
-        turnstileToken ?? undefined
-      );
+        displayName: displayName.trim() || undefined,
+        turnstileToken: turnstileToken ?? undefined,
+        inviteCode: inviteCode.trim() || undefined,
+      });
       setDone({ emailSent: result.emailSent });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '注册失败，请重试');
@@ -113,6 +115,21 @@ export function RegisterPage() {
               onChange={(event) => setPassword(event.target.value)}
             />
           </div>
+
+          {config?.inviteRequired ? (
+            <div className={styles.field}>
+              <span className={styles.label}>邀请码</span>
+              <input
+                className={styles.input}
+                required
+                maxLength={32}
+                placeholder="请输入管理员提供的邀请码"
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+              />
+              <span className={styles.hint}>本站开启邀请制，需要有效邀请码才能完成注册。</span>
+            </div>
+          ) : null}
 
           <Turnstile siteKey={config?.turnstileEnabled ? config.turnstileSiteKey : null} onToken={setTurnstileToken} />
 

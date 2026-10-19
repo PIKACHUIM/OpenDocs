@@ -1,7 +1,7 @@
 import type { SqlClient } from './sql';
 
 /**
- * 表结构。与 migrations/0001_init.sql 保持一致。
+ * 表结构。与 migrations/0001_init.sql + 0002_folders_invites.sql 保持一致。
  *
  * 注意：D1 的 exec() 只能按「每行一条语句」解析，多行的 CREATE TABLE 会解析失败，
  * 所以这里一律用 prepare + batch 逐条执行，而不是 exec。
@@ -55,12 +55,17 @@ export const SCHEMA_STATEMENTS: string[] = [
     link_token TEXT,
     link_token_hash TEXT UNIQUE,
     last_edited_by TEXT,
+    folder_id TEXT,
+    starred INTEGER NOT NULL DEFAULT 0,
+    last_opened_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     deleted_at TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_id, deleted_at, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents (updated_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents (owner_id, folder_id, deleted_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_starred ON documents (owner_id, starred, updated_at DESC)`,
 
   `CREATE TABLE IF NOT EXISTS document_members (
     document_id TEXT NOT NULL,
@@ -89,6 +94,44 @@ export const SCHEMA_STATEMENTS: string[] = [
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+
+  // 文件夹（parent_id 为 NULL 表示根目录，支持多级）
+  `CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    parent_id TEXT,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_folders_owner ON folders (owner_id, parent_id, deleted_at)`,
+
+  // 邀请码（code 明文，管理后台需要展示/复制）
+  `CREATE TABLE IF NOT EXISTS invite_codes (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    disabled INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code)`,
+];
+
+/**
+ * 老库补列：`CREATE TABLE IF NOT EXISTS` 不会给已存在的表加字段，
+ * 所以对已经跑过 0001 的库需要单独 ALTER。SQLite 没有 ADD COLUMN IF NOT EXISTS，
+ * 这里逐条执行并吞掉「duplicate column」错误，保证幂等。
+ */
+const COLUMN_PATCHES: string[] = [
+  'ALTER TABLE documents ADD COLUMN folder_id TEXT',
+  'ALTER TABLE documents ADD COLUMN starred INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE documents ADD COLUMN last_opened_at TEXT',
 ];
 
 const ready = new Map<string, Promise<void>>();
@@ -97,12 +140,19 @@ const ready = new Map<string, Promise<void>>();
 export function ensureSchema(sql: SqlClient): Promise<void> {
   let pending = ready.get(sql.id);
   if (!pending) {
-    pending = sql
-      .batch(SCHEMA_STATEMENTS.map((statement) => ({ sql: statement })))
-      .catch((error) => {
-        ready.delete(sql.id);
-        throw error;
-      });
+    pending = (async () => {
+      await sql.batch(SCHEMA_STATEMENTS.map((statement) => ({ sql: statement })));
+      for (const patch of COLUMN_PATCHES) {
+        try {
+          await sql.run(patch);
+        } catch {
+          // 列已存在（新库走 CREATE TABLE 时就已经有了），忽略
+        }
+      }
+    })().catch((error) => {
+      ready.delete(sql.id);
+      throw error;
+    });
     ready.set(sql.id, pending);
   }
   return pending;

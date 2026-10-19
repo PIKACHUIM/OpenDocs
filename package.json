@@ -1,6 +1,6 @@
 {
-  "name": "@drawnix/source",
-  "version": "0.0.2",
+  "name": "opendocs",
+  "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "scripts": {
@@ -20,7 +20,10 @@
     "build:edge": "nx build web && node scripts/build-edge.mjs",
     "dev:cf": "nx build web && npx wrangler dev",
     "deploy:cf": "nx build web && npx wrangler deploy",
-    "d1:init": "npx wrangler d1 execute drawnix --remote --file=./migrations/0001_init.sql"
+    "d1:init": "npx wrangler d1 execute drawnix --remote --file=./migrations/0001_init.sql",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
     "@floating-ui/react": "^0.26.24",
@@ -105,6 +108,7 @@
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
     "vite-plugin-dts": "^4.5.3",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.9"
   }
 }

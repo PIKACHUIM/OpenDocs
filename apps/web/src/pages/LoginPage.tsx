@@ -32,7 +32,7 @@ export function LoginPage() {
   return (
     <div className={styles.authPage}>
       <div className={styles.authCard}>
-        <h1 className={styles.authTitle}>{config?.siteName ?? 'Drawnix'}</h1>
+        <h1 className={styles.authTitle}>{config?.siteName ?? 'OpenDocs'}</h1>
         <p className={styles.authSubtitle}>登录以管理你的云端文档</p>
 
         <form onSubmit={submit}>

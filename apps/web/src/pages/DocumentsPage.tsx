@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   documentApi,
   emptyContentFor,
+  folderApi,
   type ApiDocument,
+  type ApiFolder,
   type DocumentType,
 } from '../api';
 import { navigate } from '../lib/router';
@@ -14,163 +16,229 @@ import { ShareDialog } from '../ui/ShareDialog';
 import { TopBar, VerifyEmailBanner } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 30;
+const VIEW_KEY = 'opendocs:docs-view';
 
-const TYPE_META: Record<DocumentType, { label: string; icon: string }> = {
-  mindmap: { label: '思维导图', icon: '🧠' },
-  markdown: { label: 'Markdown', icon: '📝' },
-  word: { label: 'Word 文档', icon: '📄' },
-  excel: { label: 'Excel 表格', icon: '📊' },
-  ppt: { label: '演示文稿', icon: '📽️' },
+/**
+ * 文档类型元信息。
+ * 图标用「字标 + 低饱和底色」而不是 emoji：emoji 在不同系统上字形差异大，
+ * 且是「AI 生成感」最明显的特征之一。
+ */
+const TYPE_META: Record<DocumentType, { label: string; badge: string; fg: string; bg: string }> = {
+  mindmap: { label: '白板 / 思维导图', badge: '板', fg: '#3370ff', bg: '#eef3ff' },
+  markdown: { label: 'Markdown', badge: 'MD', fg: '#6f4bd8', bg: '#f3efff' },
+  word: { label: 'Word 文档', badge: 'W', fg: '#1a56c4', bg: '#eaf1fe' },
+  excel: { label: 'Excel 表格', badge: 'X', fg: '#0f7b45', bg: '#e9f7ef' },
+  ppt: { label: '演示文稿', badge: 'P', fg: '#c2500f', bg: '#fdf0e8' },
 };
 
-function formatTime(value: string): string {
+type Scope = 'recent' | 'owned' | 'shared' | 'sent' | 'starred' | 'trash';
+type View = 'list' | 'card';
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  recent: '最近',
+  owned: '我的文档',
+  shared: '与我共享',
+  sent: '我的分享',
+  starred: '收藏文档',
+  trash: '最近删除',
+};
+
+/** 右键菜单的目标：文档或目录 */
+type ContextTarget =
+  | { kind: 'document'; doc: ApiDocument; x: number; y: number }
+  | { kind: 'folder'; folder: ApiFolder; x: number; y: number };
+
+function formatTime(value: string | null): string {
+  if (!value) return '-';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
+  if (Number.isNaN(date.getTime())) return '-';
   const diff = Date.now() - date.getTime();
-  const minute = 60 * 1000;
+  const minute = 60_000;
   const hour = 60 * minute;
   const day = 24 * hour;
   if (diff < minute) return '刚刚';
   if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`;
   if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  return date.toLocaleDateString();
+  if (diff < day * 7) return `${Math.floor(diff / day)} 天前`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
 }
 
 function formatSize(bytes: number): string {
+  if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-type Scope = 'owned' | 'shared' | 'trash';
+function DocIcon({ type }: { type: DocumentType }) {
+  const meta = TYPE_META[type];
+  return (
+    <span className={styles.docIcon} style={{ color: meta.fg, background: meta.bg }}>
+      {meta.badge}
+    </span>
+  );
+}
 
 export function DocumentsPage() {
   const { user, loading: authLoading } = useAuth();
+
   const [scope, setScope] = useState<Scope>('owned');
+  /** null 表示「我的文档」全部；字符串表示正在浏览某个目录 */
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [view, setView] = useState<View>(() => {
+    const stored = typeof window === 'undefined' ? null : window.localStorage.getItem(VIEW_KEY);
+    return stored === 'card' ? 'card' : 'list';
+  });
+
+  const [folders, setFolders] = useState<ApiFolder[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   const [documents, setDocuments] = useState<ApiDocument[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 「最近删除」的保留天数，由服务端下发 */
+  const [retentionDays, setRetentionDays] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextTarget | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<ApiDocument | null>(null);
   const [renameTarget, setRenameTarget] = useState<ApiDocument | null>(null);
   const [renameValue, setRenameValue] = useState('');
-
-  const load = useCallback(
-    async (nextPage = 1) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data =
-          scope === 'owned'
-            ? await documentApi.list({ scope: 'owned', page: nextPage, pageSize: PAGE_SIZE, q: query })
-            : scope === 'shared'
-              ? await documentApi.list({ scope: 'shared', page: nextPage, pageSize: PAGE_SIZE, q: query })
-              : await documentApi.list({
-                  scope: 'owned',
-                  page: nextPage,
-                  pageSize: PAGE_SIZE,
-                  q: query,
-                  trashed: true,
-                });
-        setDocuments(data.documents);
-        setTotal(data.total);
-        setPage(data.page);
-      } catch (caught) {
-        setError(caught instanceof ApiError ? caught.message : '加载失败');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [scope, query]
-  );
+  const [moveTarget, setMoveTarget] = useState<ApiDocument | null>(null);
+  const [folderModalOpen, setFolderModalOpen] = useState(false);
+  const [folderName, setFolderName] = useState('');
 
   useEffect(() => {
-    if (!authLoading && user) void load(1);
-  }, [authLoading, user, load]);
+    window.localStorage.setItem(VIEW_KEY, view);
+  }, [view]);
 
-  if (!authLoading && !user) {
-    navigate('/login', { replace: true });
-    return null;
-  }
+  const loadFolders = useCallback(async () => {
+    try {
+      const data = await folderApi.list();
+      setFolders(data.folders);
+    } catch {
+      // 目录加载失败不影响文档列表
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: Parameters<typeof documentApi.list>[0] = {
+        page,
+        pageSize: PAGE_SIZE,
+        q: query || undefined,
+      };
+      if (scope === 'shared') params.scope = 'shared';
+      if (scope === 'sent') params.scope = 'sent';
+      if (scope === 'trash') params.trashed = true;
+      if (scope === 'starred') params.starred = true;
+      if (scope === 'recent') params.recent = true;
+      if (scope === 'owned' && folderId) params.folderId = folderId;
+
+      const data = await documentApi.list(params);
+      setDocuments(data.documents);
+      setTotal(data.total);
+      setRetentionDays(data.retentionDays ?? null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [scope, folderId, page, query]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      navigate('/login?redirect=%2Fdocuments');
+      return;
+    }
+    void load();
+    void loadFolders();
+  }, [authLoading, user, load, loadFolders]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [scope, folderId, query]);
+
+  const folderMap = useMemo(() => new Map(folders.map((item) => [item.id, item])), [folders]);
+
+  const childFolders = useMemo(() => {
+    const map = new Map<string | null, ApiFolder[]>();
+    for (const folder of folders) {
+      const list = map.get(folder.parentId) ?? [];
+      list.push(folder);
+      map.set(folder.parentId, list);
+    }
+    return map;
+  }, [folders]);
+
+  /** 从根到当前目录的路径，用于面包屑 */
+  const breadcrumb = useMemo(() => {
+    const trail: ApiFolder[] = [];
+    let current = folderId ? folderMap.get(folderId) : null;
+    const guard = new Set<string>();
+    while (current && !guard.has(current.id)) {
+      guard.add(current.id);
+      trail.unshift(current);
+      current = current.parentId ? folderMap.get(current.parentId) ?? null : null;
+    }
+    return trail;
+  }, [folderId, folderMap]);
+
+  const currentFolderName = folderId ? folderMap.get(folderId)?.name ?? '目录' : SCOPE_LABEL[scope];
 
   const createDocument = async (type: DocumentType) => {
     setBusy(true);
-    setError(null);
     try {
       const data = await documentApi.create({
         type,
         title: `未命名${TYPE_META[type].label}`,
         content: emptyContentFor(type),
+        folderId: scope === 'owned' ? folderId : null,
       });
       navigate(`/d/${data.document.id}`);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '创建失败');
+    } finally {
       setBusy(false);
+      setCreateOpen(false);
     }
   };
 
-  const duplicate = async (document: ApiDocument) => {
+  const createFolder = async () => {
+    if (!folderName.trim()) return;
     setBusy(true);
     try {
-      await documentApi.duplicate(document.id);
-      await load(page);
+      await folderApi.create({ name: folderName.trim(), parentId: folderId });
+      setFolderName('');
+      setFolderModalOpen(false);
+      await loadFolders();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '复制失败');
+      setError(caught instanceof ApiError ? caught.message : '创建目录失败');
     } finally {
       setBusy(false);
     }
   };
 
-  const moveToTrash = async (document: ApiDocument) => {
-    if (!window.confirm(`将「${document.title}」移入回收站？`)) return;
+  const rename = async () => {
+    if (!renameTarget || !renameValue.trim()) return;
     setBusy(true);
     try {
-      await documentApi.remove(document.id);
-      await load(page);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '删除失败');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const restore = async (document: ApiDocument) => {
-    setBusy(true);
-    try {
-      await documentApi.restore(document.id);
-      await load(page);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '恢复失败');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const permanentDelete = async (document: ApiDocument) => {
-    if (!window.confirm(`永久删除「${document.title}」？该操作不可恢复。`)) return;
-    setBusy(true);
-    try {
-      await documentApi.remove(document.id, true);
-      await load(page);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '删除失败');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitRename = async () => {
-    if (!renameTarget) return;
-    setBusy(true);
-    try {
-      await documentApi.rename(renameTarget.id, renameValue);
+      await documentApi.update(renameTarget.id, { title: renameValue.trim() });
       setRenameTarget(null);
-      await load(page);
+      await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '重命名失败');
     } finally {
@@ -178,193 +246,700 @@ export function DocumentsPage() {
     }
   };
 
+  const moveTo = async (targetFolderId: string | null) => {
+    if (!moveTarget) return;
+    setBusy(true);
+    try {
+      await documentApi.update(moveTarget.id, { folderId: targetFolderId });
+      setMoveTarget(null);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '移动失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleStar = async (doc: ApiDocument) => {
+    setBusy(true);
+    try {
+      await documentApi.update(doc.id, { starred: !doc.starred });
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '操作失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeDocument = async (doc: ApiDocument, permanent = false) => {
+    const message = permanent
+      ? `永久删除「${doc.title}」？该操作不可恢复。`
+      : `将「${doc.title}」移入回收站？`;
+    if (!window.confirm(message)) return;
+    setBusy(true);
+    try {
+      await documentApi.remove(doc.id, permanent);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '删除失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreDocument = async (doc: ApiDocument) => {
+    setBusy(true);
+    try {
+      await documentApi.restore(doc.id);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '恢复失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const duplicateDocument = async (doc: ApiDocument) => {
+    setBusy(true);
+    try {
+      await documentApi.duplicate(doc.id);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '创建副本失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDocument = (doc: ApiDocument) => navigate(`/d/${doc.id}`);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  /** 关闭右键菜单：点击任意处、滚动、ESC 都收起 */
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contextMenu]);
+
+  const openDocMenu = (event: React.MouseEvent, doc: ApiDocument) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ kind: 'document', doc, x: event.clientX, y: event.clientY });
+  };
+
+  const openFolderMenu = (event: React.MouseEvent, folder: ApiFolder) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ kind: 'folder', folder, x: event.clientX, y: event.clientY });
+  };
+
+  const renameFolder = async (folder: ApiFolder) => {
+    setContextMenu(null);
+    const next = window.prompt('重命名目录', folder.name);
+    if (!next || !next.trim() || next.trim() === folder.name) return;
+    setBusy(true);
+    try {
+      await folderApi.update(folder.id, { name: next.trim() });
+      await loadFolders();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '重命名目录失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeFolder = async (folder: ApiFolder) => {
+    setContextMenu(null);
+    if (!window.confirm(`删除目录「${folder.name}」？其中的文档会移动到上级目录，不会被删除。`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await folderApi.remove(folder.id);
+      if (folderId === folder.id) setFolderId(folder.parentId);
+      await Promise.all([loadFolders(), load()]);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '删除目录失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renderRowMenu = (doc: ApiDocument) => (
+    <Dropdown trigger={<span className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}>⋯</span>}>
+      {scope === 'trash' ? (
+        <>
+          <DropdownItem onClick={() => restoreDocument(doc)}>恢复</DropdownItem>
+          <DropdownItem onClick={() => removeDocument(doc, true)}>永久删除</DropdownItem>
+        </>
+      ) : (
+        <>
+          <DropdownItem
+            onClick={() => {
+              setRenameTarget(doc);
+              setRenameValue(doc.title);
+            }}
+          >
+            重命名
+          </DropdownItem>
+          <DropdownItem onClick={() => setMoveTarget(doc)}>移动到目录</DropdownItem>
+          <DropdownItem onClick={() => toggleStar(doc)}>
+            {doc.starred ? '取消收藏' : '收藏'}
+          </DropdownItem>
+          <DropdownItem onClick={() => setShareTarget(doc)}>分享</DropdownItem>
+          <DropdownItem onClick={() => duplicateDocument(doc)}>创建副本</DropdownItem>
+          <DropdownItem onClick={() => removeDocument(doc)}>移入回收站</DropdownItem>
+        </>
+      )}
+    </Dropdown>
+  );
+
+  const locationLabel = (doc: ApiDocument) =>
+    doc.folderId ? folderMap.get(doc.folderId)?.name ?? '目录' : '我的文档';
+
+  const renderListItem = (doc: ApiDocument) => (
+    <div
+      key={doc.id}
+      className={styles.listRow}
+      onClick={() => openDocument(doc)}
+      onContextMenu={(event) => openDocMenu(event, doc)}
+    >
+      <span className={styles.listNameCell}>
+        <DocIcon type={doc.type} />
+        <span className={styles.cardTitle} style={{ marginBottom: 0 }}>
+          {doc.title}
+        </span>
+        {doc.starred ? <span className={`${styles.tag} ${styles.tagMuted}`}>已收藏</span> : null}
+        {doc.linkShared ? <span className={`${styles.tag} ${styles.tagMuted}`}>已分享</span> : null}
+      </span>
+      <span>{doc.myRole === 'owner' || !doc.ownerName ? '我' : doc.ownerName}</span>
+      <span>{locationLabel(doc)}</span>
+      <span>{formatTime(doc.lastOpenedAt ?? doc.updatedAt)}</span>
+      <span className={styles.listRowActions} onClick={(event) => event.stopPropagation()}>
+        {renderRowMenu(doc)}
+      </span>
+    </div>
+  );
+
+  const renderCard = (doc: ApiDocument) => (
+    <div
+      key={doc.id}
+      className={styles.card}
+      onClick={() => openDocument(doc)}
+      onContextMenu={(event) => openDocMenu(event, doc)}
+    >
+      <div className={styles.cardIcon}>
+        <DocIcon type={doc.type} />
+      </div>
+      <div className={styles.cardTitle}>{doc.title}</div>
+      <div className={styles.cardMeta}>
+        {formatTime(doc.lastOpenedAt ?? doc.updatedAt)} · {formatSize(doc.sizeBytes)}
+      </div>
+      <div className={styles.cardMenu} onClick={(event) => event.stopPropagation()}>
+        {renderRowMenu(doc)}
+      </div>
+    </div>
+  );
+
+  const renderFolderTree = (parentId: string | null, depth: number): React.ReactNode => {
+    const items = childFolders.get(parentId) ?? [];
+    return items.map((folder) => {
+      const children = childFolders.get(folder.id) ?? [];
+      const isOpen = expanded[folder.id] ?? false;
+      return (
+        <div key={folder.id}>
+          <div className={styles.sidebarFolderRow} style={{ paddingLeft: depth * 12 }}>
+            {children.length > 0 ? (
+              <button
+                type="button"
+                className={styles.sidebarFolderToggle}
+                onClick={() => setExpanded((prev) => ({ ...prev, [folder.id]: !isOpen }))}
+              >
+                {isOpen ? '▾' : '▸'}
+              </button>
+            ) : (
+              <span className={styles.sidebarFolderToggle} />
+            )}
+            <button
+              type="button"
+              className={`${styles.sidebarItem} ${
+                scope === 'owned' && folderId === folder.id ? styles.sidebarItemActive : ''
+              }`}
+              onClick={() => {
+                setScope('owned');
+                setFolderId(folder.id);
+              }}
+              onContextMenu={(event) => openFolderMenu(event, folder)}
+            >
+              <span className={styles.sidebarItemText}>{folder.name}</span>
+            </button>
+          </div>
+          {isOpen ? renderFolderTree(folder.id, depth + 1) : null}
+        </div>
+      );
+    });
+  };
+
+  const menuDoc = contextMenu?.kind === 'document' ? contextMenu.doc : null;
+  const menuFolder = contextMenu?.kind === 'folder' ? contextMenu.folder : null;
 
   return (
     <div className={styles.page}>
       <TopBar />
       <VerifyEmailBanner />
-      <div className={styles.content}>
-        <div className={styles.sectionHeader}>
-          <h1>我的文档</h1>
-          <Dropdown
-            trigger={
-              <span className={`${styles.button} ${styles.buttonPrimary}`}>+ 新建文档</span>
-            }
-          >
-            {(Object.keys(TYPE_META) as DocumentType[]).map((type) => (
-              <DropdownItem key={type} onClick={() => createDocument(type)}>
-                {TYPE_META[type].icon} {TYPE_META[type].label}
-              </DropdownItem>
-            ))}
-          </Dropdown>
-        </div>
 
-        <div className={styles.tabs}>
+      <div className={styles.docsLayout}>
+        <aside className={styles.sidebar}>
+          <button type="button" className={styles.sidebarNew} onClick={() => setCreateOpen(true)}>
+            + 新建
+          </button>
+
           <button
             type="button"
-            className={`${styles.tab} ${scope === 'owned' ? styles.tabActive : ''}`}
-            onClick={() => setScope('owned')}
+            className={`${styles.sidebarItem} ${scope === 'recent' ? styles.sidebarItemActive : ''}`}
+            onClick={() => {
+              setScope('recent');
+              setFolderId(null);
+            }}
+          >
+            最近
+          </button>
+          <button
+            type="button"
+            className={`${styles.sidebarItem} ${
+              scope === 'owned' && !folderId ? styles.sidebarItemActive : ''
+            }`}
+            onClick={() => {
+              setScope('owned');
+              setFolderId(null);
+            }}
           >
             我的文档
           </button>
           <button
             type="button"
-            className={`${styles.tab} ${scope === 'shared' ? styles.tabActive : ''}`}
-            onClick={() => setScope('shared')}
+            className={`${styles.sidebarItem} ${scope === 'shared' ? styles.sidebarItemActive : ''}`}
+            onClick={() => {
+              setScope('shared');
+              setFolderId(null);
+            }}
           >
             与我共享
           </button>
           <button
             type="button"
-            className={`${styles.tab} ${scope === 'trash' ? styles.tabActive : ''}`}
-            onClick={() => setScope('trash')}
-          >
-            回收站
-          </button>
-        </div>
-
-        <div className={styles.row} style={{ marginBottom: 16 }}>
-          <input
-            className={styles.input}
-            placeholder="搜索标题…"
-            style={{ maxWidth: 280 }}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void load(1);
+            className={`${styles.sidebarItem} ${scope === 'sent' ? styles.sidebarItemActive : ''}`}
+            onClick={() => {
+              setScope('sent');
+              setFolderId(null);
             }}
-          />
-          <button type="button" className={styles.button} onClick={() => load(1)}>
-            搜索
+          >
+            我的分享
           </button>
-          <span className={styles.grow} />
-          <span className={styles.hint}>共 {total} 个</span>
-        </div>
+          <button
+            type="button"
+            className={`${styles.sidebarItem} ${scope === 'starred' ? styles.sidebarItemActive : ''}`}
+            onClick={() => {
+              setScope('starred');
+              setFolderId(null);
+            }}
+          >
+            收藏文档
+          </button>
+          <button
+            type="button"
+            className={`${styles.sidebarItem} ${scope === 'trash' ? styles.sidebarItemActive : ''}`}
+            onClick={() => {
+              setScope('trash');
+              setFolderId(null);
+            }}
+          >
+            最近删除
+          </button>
 
-        {error ? <div className={styles.error}>{error}</div> : null}
+          <div className={styles.sidebarSection}>目录</div>
+          {renderFolderTree(null, 0)}
+          <button type="button" className={styles.sidebarItem} onClick={() => setFolderModalOpen(true)}>
+            <span className={styles.sidebarItemText}>+ 新建目录</span>
+          </button>
+        </aside>
 
-        {loading ? (
-          <div className={styles.center}>加载中…</div>
-        ) : documents.length === 0 ? (
-          <div className={styles.empty}>
-            {scope === 'trash' ? '回收站是空的' : scope === 'shared' ? '还没有人与你共享文档' : '还没有文档，点击上方「新建文档」开始吧'}
-          </div>
-        ) : (
-          <div className={styles.grid}>
-            {documents.map((document) => (
-              <div
-                key={document.id}
-                className={styles.card}
+        <main className={styles.docsMain}>
+          <div className={styles.docsToolbar}>
+            <div className={styles.breadcrumb}>
+              <button
+                type="button"
+                className={styles.breadcrumbItem}
                 onClick={() => {
-                  if (scope !== 'trash') navigate(`/d/${document.id}`);
+                  setScope('owned');
+                  setFolderId(null);
                 }}
               >
-                <div className={styles.cardMenu} onClick={(event) => event.stopPropagation()}>
-                  <Dropdown trigger={<span style={{ cursor: 'pointer', padding: '2px 6px' }}>⋯</span>}>
-                    {scope === 'trash' ? (
-                      <>
-                        <DropdownItem onClick={() => restore(document)}>恢复</DropdownItem>
-                        <DropdownItem onClick={() => permanentDelete(document)} danger>
-                          永久删除
-                        </DropdownItem>
-                      </>
-                    ) : (
-                      <>
-                        <DropdownItem
-                          onClick={() => {
-                            setRenameTarget(document);
-                            setRenameValue(document.title);
-                          }}
-                        >
-                          重命名
-                        </DropdownItem>
-                        <DropdownItem onClick={() => duplicate(document)}>创建副本</DropdownItem>
-                        {document.myRole === 'owner' || !document.myRole ? (
-                          <DropdownItem onClick={() => setShareTarget(document)}>分享</DropdownItem>
-                        ) : null}
-                        {document.myRole === 'owner' || !document.myRole ? (
-                          <DropdownItem onClick={() => moveToTrash(document)} danger>
-                            删除
-                          </DropdownItem>
-                        ) : null}
-                      </>
-                    )}
-                  </Dropdown>
-                </div>
-                <div className={styles.cardIcon}>{TYPE_META[document.type].icon}</div>
-                <div className={styles.cardTitle}>{document.title}</div>
-                <div className={styles.cardMeta}>
-                  {formatTime(document.updatedAt)} · {formatSize(document.sizeBytes)}
-                  {document.linkShared ? (
-                    <>
-                      {' · '}
-                      <span className={styles.tagSuccess}>
-                        {document.linkMode === 'edit' ? '可编辑分享' : '只读分享'}
-                      </span>
-                    </>
-                  ) : null}
-                  {document.myRole && document.myRole !== 'owner' ? (
-                    <>
-                      {' · '}
-                      <span className={styles.tagMuted}>{document.myRole === 'editor' ? '协作编辑' : '协作只读'}</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                {SCOPE_LABEL[scope]}
+              </button>
+              {breadcrumb.map((folder) => (
+                <span key={folder.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span>/</span>
+                  <button
+                    type="button"
+                    className={styles.breadcrumbItem}
+                    onClick={() => setFolderId(folder.id)}
+                  >
+                    {folder.name}
+                  </button>
+                </span>
+              ))}
+            </div>
 
-        {totalPages > 1 ? (
-          <div className={styles.pagination}>
-            <button className={styles.button} disabled={page <= 1 || busy} onClick={() => load(page - 1)}>
-              上一页
+            <span className={styles.grow} />
+
+            <input
+              className={styles.searchInput}
+              placeholder="搜索文档名称"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') setQuery(search.trim());
+              }}
+            />
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonSm}`}
+              onClick={() => setQuery(search.trim())}
+            >
+              搜索
             </button>
-            <span>
-              {page} / {totalPages}
-            </span>
-            <button className={styles.button} disabled={page >= totalPages || busy} onClick={() => load(page + 1)}>
-              下一页
-            </button>
+
+            <div className={styles.segmented}>
+              <button
+                type="button"
+                className={`${styles.segmentedItem} ${
+                  view === 'list' ? styles.segmentedItemActive : ''
+                }`}
+                onClick={() => setView('list')}
+                title="列表视图"
+              >
+                列表
+              </button>
+              <button
+                type="button"
+                className={`${styles.segmentedItem} ${
+                  view === 'card' ? styles.segmentedItemActive : ''
+                }`}
+                onClick={() => setView('card')}
+                title="卡片视图"
+              >
+                卡片
+              </button>
+            </div>
           </div>
-        ) : null}
+
+          {error ? <div className={styles.error}>{error}</div> : null}
+
+          {scope === 'trash' && retentionDays ? (
+            <div className={styles.hint} style={{ marginBottom: 10 }}>
+              最近删除的文档会保留 {retentionDays} 天，超过后自动彻底删除（可在管理后台调整）。
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className={styles.center}>加载中…</div>
+          ) : documents.length === 0 ? (
+            <div className={styles.empty}>
+              <div>{currentFolderName}</div>
+              <div className={styles.hint}>
+                {scope === 'trash'
+                  ? '回收站是空的'
+                  : query
+                    ? '没有匹配的文档'
+                    : '这里还没有文档，点击左上角「新建」开始'}
+              </div>
+            </div>
+          ) : view === 'list' ? (
+            <div className={styles.listWrap}>
+              <div className={styles.listHeaderRow}>
+                <span>名称</span>
+                <span>所有者</span>
+                <span>位置</span>
+                <span>最近查看</span>
+                <span style={{ textAlign: 'right' }}>大小</span>
+              </div>
+              {documents.map(renderListItem)}
+            </div>
+          ) : (
+            <div className={styles.grid}>{documents.map(renderCard)}</div>
+          )}
+
+          {totalPages > 1 ? (
+            <div className={styles.pagination}>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.buttonSm}`}
+                disabled={page <= 1}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                上一页
+              </button>
+              <span>
+                {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.buttonSm}`}
+                disabled={page >= totalPages}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                下一页
+              </button>
+            </div>
+          ) : null}
+        </main>
       </div>
+
+      <Modal open={createOpen} title="新建" onClose={() => setCreateOpen(false)}>
+        <div className={styles.grid}>
+          {(Object.keys(TYPE_META) as DocumentType[]).map((type) => (
+            <button
+              key={type}
+              type="button"
+              className={styles.card}
+              style={{ border: 'none', textAlign: 'left' }}
+              disabled={busy}
+              onClick={() => createDocument(type)}
+            >
+              <div className={styles.cardIcon}>
+                <DocIcon type={type} />
+              </div>
+              <div className={styles.cardTitle}>{TYPE_META[type].label}</div>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      <Modal open={folderModalOpen} title="新建目录" onClose={() => setFolderModalOpen(false)}>
+        <div className={styles.field}>
+          <span className={styles.label}>目录名称</span>
+          <input
+            className={styles.input}
+            value={folderName}
+            onChange={(event) => setFolderName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void createFolder();
+            }}
+            autoFocus
+          />
+        </div>
+        <div className={styles.row} style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className={styles.button} onClick={() => setFolderModalOpen(false)}>
+            取消
+          </button>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary}`}
+            disabled={busy || !folderName.trim()}
+            onClick={createFolder}
+          >
+            创建
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={!!renameTarget} title="重命名" onClose={() => setRenameTarget(null)}>
+        <div className={styles.field}>
+          <span className={styles.label}>文档名称</span>
+          <input
+            className={styles.input}
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void rename();
+            }}
+            autoFocus
+          />
+        </div>
+        <div className={styles.row} style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className={styles.button} onClick={() => setRenameTarget(null)}>
+            取消
+          </button>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary}`}
+            disabled={busy || !renameValue.trim()}
+            onClick={rename}
+          >
+            保存
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={!!moveTarget} title="移动到目录" onClose={() => setMoveTarget(null)}>
+        <div className={styles.listWrap}>
+          <button
+            type="button"
+            className={styles.sidebarItem}
+            onClick={() => moveTo(null)}
+          >
+            我的文档（根目录）
+          </button>
+          {folders.map((folder) => (
+            <button
+              key={folder.id}
+              type="button"
+              className={styles.sidebarItem}
+              onClick={() => moveTo(folder.id)}
+            >
+              <span className={styles.sidebarItemText}>{folder.name}</span>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {contextMenu && menuDoc ? (
+        <div
+          className={styles.contextMenu}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              openDocument(menuDoc);
+            }}
+          >
+            打开
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setRenameTarget(menuDoc);
+              setRenameValue(menuDoc.title);
+            }}
+          >
+            重命名
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setMoveTarget(menuDoc);
+            }}
+          >
+            移动到目录
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              void toggleStar(menuDoc);
+            }}
+          >
+            {menuDoc.starred ? '取消收藏' : '收藏文档'}
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setShareTarget(menuDoc);
+            }}
+          >
+            分享
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              void duplicateDocument(menuDoc);
+            }}
+          >
+            创建副本
+          </button>
+          <button
+            type="button"
+            className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
+            onClick={() => {
+              setContextMenu(null);
+              void removeDocument(menuDoc);
+            }}
+          >
+            移到最近删除
+          </button>
+        </div>
+      ) : null}
+
+      {contextMenu && menuFolder ? (
+        <div
+          className={styles.contextMenu}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setScope('owned');
+              setFolderId(menuFolder.id);
+            }}
+          >
+            打开目录
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => void renameFolder(menuFolder)}
+          >
+            重命名
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setFolderId(menuFolder.id);
+              setFolderModalOpen(true);
+            }}
+          >
+            新建子目录
+          </button>
+          <button
+            type="button"
+            className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
+            onClick={() => void removeFolder(menuFolder)}
+          >
+            删除目录
+          </button>
+        </div>
+      ) : null}
 
       {shareTarget ? (
         <ShareDialog
           open
-          onClose={() => setShareTarget(null)}
           document={shareTarget}
-          onChanged={(updated) => {
-            setDocuments((list) => list.map((item) => (item.id === updated.id ? updated : item)));
+          onClose={() => {
+            setShareTarget(null);
+            void load();
           }}
         />
       ) : null}
-
-      <Modal
-        open={!!renameTarget}
-        title="重命名文档"
-        onClose={() => setRenameTarget(null)}
-        footer={
-          <>
-            <button className={styles.button} onClick={() => setRenameTarget(null)}>
-              取消
-            </button>
-            <button className={`${styles.button} ${styles.buttonPrimary}`} onClick={submitRename} disabled={busy}>
-              保存
-            </button>
-          </>
-        }
-      >
-        <input
-          className={styles.input}
-          value={renameValue}
-          maxLength={120}
-          onChange={(event) => setRenameValue(event.target.value)}
-          autoFocus
-        />
-      </Modal>
     </div>
   );
 }

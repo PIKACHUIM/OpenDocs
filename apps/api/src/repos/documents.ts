@@ -20,6 +20,8 @@ export function createDocumentRepo(sql: SqlClient) {
     type: DocumentType;
     title: string;
     sizeBytes?: number;
+    /** 归属目录；不传或 null 表示未归档 */
+    folderId?: string | null;
   }): Promise<DocumentRecord> => {
     const now = new Date().toISOString();
     const record: DocumentRecord = {
@@ -34,6 +36,9 @@ export function createDocumentRepo(sql: SqlClient) {
       link_token: null,
       link_token_hash: null,
       last_edited_by: input.ownerId,
+      folder_id: input.folderId ?? null,
+      starred: 0,
+      last_opened_at: null,
       created_at: now,
       updated_at: now,
       deleted_at: null,
@@ -41,8 +46,9 @@ export function createDocumentRepo(sql: SqlClient) {
     record.content_key = documentContentKey(record.id);
     await sql.run(
       `INSERT INTO documents (id, owner_id, type, title, content_key, size_bytes, version,
-         link_mode, link_token, link_token_hash, last_edited_by, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, NULL)`,
+         link_mode, link_token, link_token_hash, last_edited_by, folder_id, starred, last_opened_at,
+         created_at, updated_at, deleted_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, 0, NULL, ?, ?, NULL)`,
       [
         record.id,
         record.owner_id,
@@ -51,6 +57,7 @@ export function createDocumentRepo(sql: SqlClient) {
         record.content_key,
         record.size_bytes,
         record.last_edited_by,
+        record.folder_id,
         record.created_at,
         record.updated_at,
       ]
@@ -106,6 +113,36 @@ export function createDocumentRepo(sql: SqlClient) {
 
   const hardDelete = (id: string) => sql.run('DELETE FROM documents WHERE id = ?', [id]);
 
+  /** 移动到目录；folderId 为 null 表示移出到根目录 */
+  const setFolder = async (id: string, folderId: string | null): Promise<DocumentRecord | null> => {
+    await sql.run('UPDATE documents SET folder_id = ?, updated_at = ? WHERE id = ?', [
+      folderId,
+      new Date().toISOString(),
+      id,
+    ]);
+    return getById(id);
+  };
+
+  const setStarred = async (id: string, starred: boolean): Promise<DocumentRecord | null> => {
+    await sql.run('UPDATE documents SET starred = ? WHERE id = ?', [starred ? 1 : 0, id]);
+    return getById(id);
+  };
+
+  /** 记录「最近打开」时间，供文档中心的「最近」分区排序 */
+  const touchOpened = (id: string) =>
+    sql.run('UPDATE documents SET last_opened_at = ? WHERE id = ?', [
+      new Date().toISOString(),
+      id,
+    ]);
+
+  /** 删除目录时把其中的文档整体挪到目标目录（通常是父目录） */
+  const reassignFolder = (fromFolderId: string, toFolderId: string | null) =>
+    sql.run('UPDATE documents SET folder_id = ?, updated_at = ? WHERE folder_id = ?', [
+      toFolderId,
+      new Date().toISOString(),
+      fromFolderId,
+    ]);
+
   const setLinkShare = async (
     id: string,
     mode: LinkShareMode
@@ -142,6 +179,12 @@ export function createDocumentRepo(sql: SqlClient) {
     query?: string;
     type?: DocumentType;
     trashed?: boolean;
+    /** 只看某个目录：null = 未归档（根），不传 = 不限目录 */
+    folderId?: string | null;
+    /** 只看已收藏 */
+    starred?: boolean;
+    /** 按「最近打开」排序（没有打开记录时回退到更新时间） */
+    recent?: boolean;
   }
 
   const listOwned = async (ownerId: string, options: ListOptions) => {
@@ -152,13 +195,27 @@ export function createDocumentRepo(sql: SqlClient) {
       conditions.push('type = ?');
       params.push(options.type);
     }
+    if (options.starred) {
+      conditions.push('starred = 1');
+    }
+    if (options.folderId !== undefined) {
+      if (options.folderId === null) {
+        conditions.push('folder_id IS NULL');
+      } else {
+        conditions.push('folder_id = ?');
+        params.push(options.folderId);
+      }
+    }
     if (options.query) {
       conditions.push('title LIKE ?');
       params.push(likePattern(options.query));
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
+    const orderBy = options.recent
+      ? 'COALESCE(last_opened_at, updated_at) DESC'
+      : 'updated_at DESC';
     const rows = await sql.all<DocumentRecord>(
-      `SELECT * FROM documents ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM documents ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       [...params, pageSize, offset]
     );
     const totalRow = await sql.first<{ n: number }>(
@@ -190,6 +247,46 @@ export function createDocumentRepo(sql: SqlClient) {
     );
     return { items: rows, total: totalRow?.n ?? 0, page, pageSize };
   };
+
+  /**
+   * 「我的分享」：我拥有、并且已经分享出去的文档
+   * —— 开了链接分享，或者存在协作成员。
+   */
+  const listSharedByMe = async (ownerId: string, options: ListOptions) => {
+    const { page, pageSize, offset } = paging(options.page, options.pageSize);
+    const conditions = [
+      'd.owner_id = ?',
+      'd.deleted_at IS NULL',
+      `(d.link_mode IS NOT NULL OR EXISTS (
+         SELECT 1 FROM document_members m2 WHERE m2.document_id = d.id
+       ))`,
+    ];
+    const params: unknown[] = [ownerId];
+    if (options.query) {
+      conditions.push('d.title LIKE ?');
+      params.push(likePattern(options.query));
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const rows = await sql.all<
+      DocumentRecord & { member_count: number; link_mode: LinkShareMode | null }
+    >(
+      `SELECT d.*, (SELECT COUNT(*) FROM document_members m WHERE m.document_id = d.id) AS member_count
+       FROM documents d ${where} ORDER BY d.updated_at DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+    const totalRow = await sql.first<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM documents d ${where}`,
+      params
+    );
+    return { items: rows, total: totalRow?.n ?? 0, page, pageSize };
+  };
+
+  /** 找出某个用户「最近删除」里已超过保留期的文档，供上层清理正文后彻底删除 */
+  const listTrashedBefore = (ownerId: string, cutoff: string) =>
+    sql.all<DocumentRecord>(
+      'SELECT * FROM documents WHERE owner_id = ? AND deleted_at IS NOT NULL AND deleted_at < ?',
+      [ownerId, cutoff]
+    );
 
   /** 管理员视角：全量文档（含已删除），可按标题 / 所有者 / 类型过滤 */
   const listAll = async (
@@ -260,11 +357,17 @@ export function createDocumentRepo(sql: SqlClient) {
     softDelete,
     restore,
     hardDelete,
+    setFolder,
+    setStarred,
+    touchOpened,
+    reassignFolder,
     setLinkShare,
     revokeLinkShare,
     getByLinkToken,
     listOwned,
     listSharedWithMe,
+    listSharedByMe,
+    listTrashedBefore,
     listAll,
     countByOwner,
     stats,

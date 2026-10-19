@@ -1,151 +1,169 @@
-<p align="center">
-  <picture style="width: 320px">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" />
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h_dark.svg?raw=true" />
-    <img src="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/logo/logo_drawnix_h.svg?raw=true" width="360" alt="Drawnix logo and name" />
-  </picture>
-</p>
 <div align="center">
-  <h2>
-    开源白板工具（SaaS），一体化白板，包含思维导图、流程图、自由画等
-  <br />
-  </h2>
+
+# OpenDocs
+
+**可自托管的在线文档协作系统**
+
+白板 / 思维导图 · Markdown · Word · Excel · 演示文稿
+一套账号、一套目录、一套分享，一次部署。
+
+[![Docs](https://img.shields.io/badge/docs-online-3370ff)](https://docs.opendocs.dev)
+[![Deploy](https://img.shields.io/badge/deploy-Cloudflare%20Workers-f38020)](docs/guide/deploy.md)
+[![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](package.json)
+
+[简体中文](README.md) · [English](README_en.md) · [在线文档](https://docs.opendocs.dev)
+
 </div>
 
-<div align="center">
-  <figure>
-    <a target="_blank" rel="noopener">
-      <img src="https://github.com/plait-board/drawnix/blob/develop/apps/web/public/product_showcase/case-2.png" alt="Product showcase" width="80%" />
-    </a>
-    <figcaption>
-      <p align="center">
-        All in one 白板，思维导图、流程图、自由画等
-      </p>
-    </figcaption>
-  </figure>
-  <a href="https://hellogithub.com/repository/plait-board/drawnix" target="_blank">
-    <picture style="width: 250">
-      <source media="(prefers-color-scheme: light)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" />
-      <source media="(prefers-color-scheme: dark)" srcset="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=dark" />
-      <img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=4dcea807fab7468a962c153b07ae4e4e&claim_uid=zmFSY5k8EuZri43&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54"/>
-    </picture>
-  </a>
+---
 
-  <br />
+## 这是什么
 
-  <a href="https://trendshift.io/repositories/13979" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13979" alt="plait-board%2Fdrawnix | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+OpenDocs 把「画」和「写」放进同一个工作台：既要能画白板与思维导图，也要能写文档、表格与演示，
+同时不想为每种文档维护一套账号与分享体系。
 
-  <br />
+前端是纯静态产物，后端是一个可部署到边缘运行时的 Hono 应用。
+数据全部落在自己的 Cloudflare（或 EdgeOne）账号下，不经过任何第三方服务。
 
-  <a href="https://atomgit.com/plait-board/drawnix" target="_blank"><img src="https://atomgit.com/plait-board/drawnix/star/new_badge.svg" alt="AtomGit G-Star" height="54" /></a>
-</div>
+> 白板内核来自开源项目 [Drawnix](https://github.com/plait-board/drawnix)（`packages/drawnix`，MIT）。
+> OpenDocs 在其之上补齐了账号、云端存储、目录、分享与管理后台。
 
-[*English README*](https://github.com/plait-board/drawnix/blob/develop/README_en.md)
+---
 
-## 特性
+## 功能
 
-- 💯 免费 + 开源
-- ⚒️ 思维导图、流程图
-- 🖌 画笔
-- 😀 插入图片
-- 🚀 基于插件机制
-- 🖼️ 📃 导出为 PNG, JSON(`.drawnix`)
-- 💾 自动保存（浏览器缓存）
-- ⚡ 编辑特性：撤销、重做、复制、粘贴等
-- 🌌 无限画布：缩放、滚动
-- 🎨 主题模式
-- 📱 移动设备适配
-- 📈 支持 mermaid 语法转流程图
-- ✨ 支持 markdown 文本转思维导图（新支持 🔥🔥🔥）
+| 模块 | 能力 |
+| --- | --- |
+| **文档类型** | 白板/思维导图、Markdown、Word、Excel、演示文稿、图片编辑 |
+| **账号** | 邮箱注册登录、PBKDF2 密码哈希、HttpOnly 会话、邮箱验证、找回密码 |
+| **邀请制** | 邀请码可用次数 / 有效期 / 启停，名额扣减并发安全 |
+| **文档管理** | 创建、重命名、副本、移动、收藏、搜索、分页、列表/卡片视图、右键菜单 |
+| **目录** | 多级文件夹，重命名与删除不丢数据（文档上提到父级） |
+| **分享** | 链接分享（只读/可编辑）、按邮箱邀请协作者、我的分享 / 与我共享 |
+| **最近删除** | 可配置保留时长（1–365 天），过期自动彻底清理 |
+| **免登录** | 首页直接试用编辑器，草稿存本地，登录后一键保存到账号 |
+| **管理后台** | 用户、文档、邀请码、站点设置（名称/注册开关/邮件/人机验证） |
+| **导出** | `.drawnix`、Markdown、PDF、`.docx`、`.xlsx`、`.pptx`、PNG |
 
-
-## 关于名称
-
-***Drawnix***  ，源于绘画(  ***Draw***  )与凤凰(  ***Phoenix***  )的灵感交织。
-
-凤凰象征着生生不息的创造力，而 *Draw* 代表着人类最原始的表达方式。在这里，每一次创作都是一次艺术的涅槃，每一笔绘画都是灵感的重生。
-
-创意如同凤凰，浴火方能重生，而  ***Drawnix***  要做技术与创意之火的守护者。
-
-*Draw Beyond, Rise Above.*
-
-
-## 与 Plait 画图框架
-
-*Drawnix* 的定位是一个开箱即用、开源、免费的工具产品，它的底层是 *Plait* 框架，*Plait* 是我司开源的一款画图框架，代表着公司在知识库产品([PingCode Wiki](https://pingcode.com/product/wiki?utm_source=drawnix))上的重要技术沉淀。
-
-
-Drawnix 是插件架构，与前面说到开源工具比技术架构更复杂一些，但是插件架构也有优势，比如能够支持多种 UI 框架（*Angular、React*），能够集成不同富文本框架（当前仅支持 *Slate* 框架），在开发上可以很好的实现业务的分层，开发各种细粒度的可复用插件，可以扩展更多的画板的应用场景。
-
-
-## 仓储结构
+## 技术栈
 
 ```
-drawnix/
-├── apps/
-│   ├── web                   # drawnix.com
-│   │    └── index.html       # HTML
-├── dist/                     # 构建产物
-├── packages/
-│   └── drawnix/              # 白板应用
-│   └── react-board/          # 白板 React 视图层
-│   └── react-text/           # 文本渲染模块
-├── package.json
-├── ...
-└── README.md
-└── README_en.md
-
+前端    React 19 · Vite · Nx · CSS Modules（无 UI 框架）
+后端    Hono · TypeScript
+数据    Cloudflare D1（结构化）+ R2 / EdgeOne Blob（正文与图片）
+部署    Workers Static Assets / EdgeOne Cloud Functions
+文档    VitePress + GitHub Actions
 ```
 
-## 应用
+## 架构一览
 
-[*https://drawnix.com*](https://drawnix.com) 是 *drawnix* 的最小化应用。
-
-近期会高频迭代 drawnix.com，直到发布 *Dawn（破晓）* 版本。
-
-
-## 开发
-
+```mermaid
+flowchart LR
+  B["浏览器<br/>React SPA"] -->|静态资源| A["资产层<br/>CDN / Static Assets"]
+  B -->|fetch /api/*| W["边缘函数<br/>Hono"]
+  W --> D[("D1<br/>用户 / 会话 / 文档元数据 / 目录 / 邀请码")]
+  W --> R[("R2 / Blob<br/>文档正文 / 图片")]
 ```
+
+- 静态请求不进入函数：`assets.run_worker_first` 只包含 `/api/*`
+- 正文不存数据库：`documents` 只存 `content_key`，规避 D1 单行 1MB 限制
+- 业务代码与平台解耦：同一份 `apps/api` 可跑在 Workers、EdgeOne 与本地 Node
+
+详细设计见 [架构文档](docs/architecture.md)。
+
+---
+
+## 快速开始
+
+```bash
+# 依赖（Node 20+）
 npm install
 
-npm run start
+# 终端 1：本地后端（node:sqlite，:8788）
+npm run dev:api
+
+# 终端 2：前端开发服务器（:7200）
+npm start
 ```
 
-## Docker
+打开 `http://localhost:7200`，**第一个注册的账号自动成为管理员**。
+
+```bash
+npm run test:api        # 后端端到端冒烟测试（无需云资源）
+npm run typecheck:api   # 后端类型检查
+```
+
+## 部署
+
+```bash
+cp wrangler.jsonc.example wrangler.jsonc   # 填入自己的 database_id
+
+npx wrangler d1 create opendocs
+npx wrangler r2 bucket create opendocs-files
+npx wrangler d1 execute opendocs --remote --file=./migrations/0001_init.sql
+npx wrangler d1 execute opendocs --remote --file=./migrations/0002_folders_invites.sql
+
+npm run deploy:cf
+```
+
+- `wrangler.jsonc` 已 gitignore，仓库只提交模板
+- EdgeOne 部署见 [部署文档](docs/guide/deploy.md)
+- 面向国内用户时请绑定自有域名（`*.workers.dev` 访问不稳定）
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [功能说明](docs/guide/features.md) | 每类文档与每个模块的能力边界 |
+| [使用教程](docs/guide/tutorial.md) | 从注册到分享的完整流程 |
+| [部署方式](docs/guide/deploy.md) | Cloudflare / EdgeOne / 文档站自定义域名 |
+| [开发方式](docs/guide/development.md) | 目录结构、命令、扩展指南 |
+| [架构设计](docs/architecture.md) | 分层、数据模型、鉴权、并发 |
+| [设计规范](docs/design.md) | 设计 token、布局、组件、状态 |
+| [需求说明](docs/requirements.md) | 角色、需求清单、验收标准 |
+
+```bash
+npm run docs:dev      # 本地预览文档站
+npm run docs:build    # 产物：docs/.vitepress/dist
+```
+
+文档站由 `.github/workflows/docs.yml` 自动构建并发布到 GitHub Pages，
+自定义域名通过 `docs/public/CNAME` 固定（默认 `docs.opendocs.dev`）。
+
+## 仓库结构
 
 ```
-docker pull pubuzhixing/drawnix:latest
+apps/web            React SPA
+apps/api            Hono 后端（平台无关）
+packages/drawnix    白板内核（上游库）
+platform/           Cloudflare / EdgeOne / Node 适配层
+migrations/         D1 迁移
+docs/               VitePress 文档站
+scripts/            启动、构建、冒烟测试
 ```
 
-## 依赖
+## 路线图
 
-- [plait](https://github.com/worktile/plait) - 开源画图框架
-- [slate](https://github.com/ianstormtaylor/slate)  - 富文本编辑器框架
-- [floating-ui](https://github.com/floating-ui/floating-ui)  - 一个超级好用的创建弹出层基础库
-
-
+- [x] 五类文档 + 账号 + 目录 + 分享 + 管理后台
+- [x] 邀请码注册、最近删除保留策略
+- [x] 免登录试用与本地草稿保存到账号
+- [x] 图片编辑（背景 / 文字 / 形状 / 图片 / 图层 / PNG 导出）
+- [ ] 图片编辑器：素材库与模板
+- [ ] 接入 Univer 实现完整 Word / Excel 编辑
+- [ ] 演示文稿自由画布与放映
+- [ ] 实时协同（CRDT / Durable Objects）
 
 ## 贡献
 
-欢迎任何形式的贡献：
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。提交前请确保：
 
-提交 Issue 或 Pull Request 前，请先阅读 [贡献指南](CONTRIBUTING.md)。
+```bash
+npm run typecheck:api
+npm run test:api
+npm run build:web
+```
 
-- 提 Bug
+## 许可
 
-- 贡献代码
-
-## 感谢支持
-
-特别感谢公司对开源项目的大力支持，也感谢为本项目贡献代码、提供建议的朋友。
-
-<p align="left">
-  <a href="https://pingcode.com?utm_source=drawnix" target="_blank">
-      <img src="https://cdn-aliyun.pingcode.com/static/site/img/pingcode-logo.4267e7b.svg" width="120" alt="PingCode" />
-  </a>
-</p>
-
-## License
-
-[MIT License](https://github.com/plait-board/drawnix/blob/master/LICENSE)
+[MIT](LICENSE)。白板内核 Drawnix 同样以 MIT 发布，版权归其原作者所有。

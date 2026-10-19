@@ -6,12 +6,13 @@ import { ShareDialog } from '../ui/ShareDialog';
 import styles from '../ui/common.module.scss';
 import shellStyles from './shell.module.scss';
 
+// 用字标而不是 emoji：emoji 在不同系统字形差异大，也最容易被看出「AI 生成感」
 const TYPE_ICON: Record<DocumentType, string> = {
-  mindmap: '🧠',
-  markdown: '📝',
-  word: '📄',
-  excel: '📊',
-  ppt: '📽️',
+  mindmap: '板',
+  markdown: 'MD',
+  word: 'W',
+  excel: 'X',
+  ppt: 'P',
 };
 
 interface DocumentShellProps {

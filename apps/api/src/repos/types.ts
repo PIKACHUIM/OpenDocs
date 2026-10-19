@@ -85,9 +85,90 @@ export interface DocumentRecord {
   link_token: string | null;
   link_token_hash: string | null;
   last_edited_by: string | null;
+  /** 所属目录；null 表示未归档（根目录） */
+  folder_id: string | null;
+  starred: number;
+  last_opened_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+/** 文件夹（目录）。parent_id 为 null 表示根级 */
+export interface FolderRecord {
+  id: string;
+  owner_id: string;
+  parent_id: string | null;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface PublicFolder {
+  id: string;
+  parentId: string | null;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function toPublicFolder(folder: FolderRecord): PublicFolder {
+  return {
+    id: folder.id,
+    parentId: folder.parent_id,
+    name: folder.name,
+    createdAt: folder.created_at,
+    updatedAt: folder.updated_at,
+  };
+}
+
+/** 邀请码 */
+export interface InviteCodeRecord {
+  id: string;
+  code: string;
+  max_uses: number;
+  used_count: number;
+  /** ISO 时间；null 表示永久有效 */
+  expires_at: string | null;
+  disabled: number;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublicInviteCode {
+  id: string;
+  code: string;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string | null;
+  disabled: boolean;
+  note: string | null;
+  createdAt: string;
+  /** 派生状态，前端直接用于展示 */
+  usable: boolean;
+}
+
+export function toPublicInviteCode(
+  record: InviteCodeRecord,
+  options?: { now?: string }
+): PublicInviteCode {
+  const now = options?.now ?? new Date().toISOString();
+  const expired = !!record.expires_at && record.expires_at <= now;
+  const exhausted = record.max_uses > 0 && record.used_count >= record.max_uses;
+  return {
+    id: record.id,
+    code: record.code,
+    maxUses: record.max_uses,
+    usedCount: record.used_count,
+    expiresAt: record.expires_at,
+    disabled: !!record.disabled,
+    note: record.note,
+    createdAt: record.created_at,
+    usable: !record.disabled && !expired && !exhausted,
+  };
 }
 
 export type DocumentMemberRole = 'viewer' | 'editor';
@@ -113,6 +194,9 @@ export interface PublicDocument {
   deletedAt: string | null;
   linkShared: boolean;
   linkMode: LinkShareMode | null;
+  folderId: string | null;
+  starred: boolean;
+  lastOpenedAt: string | null;
   /** 当前访问者相对于该文档的身份 */
   myRole?: 'owner' | DocumentMemberRole;
 }
@@ -134,6 +218,9 @@ export function toPublicDocument(
     deletedAt: doc.deleted_at,
     linkShared: !!doc.link_mode,
     linkMode: doc.link_mode,
+    folderId: doc.folder_id ?? null,
+    starred: !!doc.starred,
+    lastOpenedAt: doc.last_opened_at ?? null,
     myRole: options?.myRole,
   };
 }
