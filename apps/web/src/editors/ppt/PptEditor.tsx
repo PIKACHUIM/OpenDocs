@@ -1,238 +1,723 @@
-import { useState } from 'react';
-import { assetApi, createId, type PptContent, type PptSlide, type SlideLayout } from '../../api';
-import commonStyles from '../../ui/common.module.scss';
-import pptStyles from './ppt.module.scss';
+import { useEffect, useRef, useState } from 'react';
+import {
+  createId,
+  SLIDE_HEIGHT,
+  SLIDE_WIDTH,
+  type PptContent,
+  type PptSlide,
+  type SlideElement,
+  type SlideShapeElement,
+  type SlideTextElement,
+} from '../../api';
+import styles from './ppt.module.scss';
 
 export interface PptEditorProps {
   content: PptContent;
   canWrite: boolean;
   documentId: string | null;
-  shareToken: string | null;
   onChange: (content: PptContent) => void;
 }
 
-const LAYOUT_LABEL: Record<SlideLayout, string> = {
-  title: '标题页',
-  'title-body': '标题 + 正文',
-  'two-column': '左右两栏',
-  blank: '空白 + 图片',
-};
+/**
+ * 把旧版「固定版式」幻灯片迁移成自由画布的 elements。
+ * 只在新旧混用时执行一次，之后所有数据都是 elements。
+ */
+function migrateSlide(slide: PptSlide): SlideElement[] {
+  if (slide.elements) return slide.elements;
+  const elements: SlideElement[] = [];
+  const layout = slide.layout ?? 'title-body';
+  const text = (
+    partial: Partial<SlideTextElement> & Pick<SlideTextElement, 'x' | 'y' | 'w' | 'h' | 'text'>
+  ): SlideTextElement => ({
+    id: createId('el'),
+    type: 'text',
+    fontSize: 28,
+    color: '#1b1f24',
+    bold: false,
+    align: 'left',
+    ...partial,
+  });
 
-function newSlide(): PptSlide {
-  return { id: createId('slide'), layout: 'title-body', title: '新幻灯片', body: '' };
+  if (layout === 'title') {
+    elements.push(
+      text({
+        x: 120,
+        y: 250,
+        w: 1040,
+        h: 120,
+        text: slide.title || '标题',
+        fontSize: 64,
+        bold: true,
+        align: 'center',
+      })
+    );
+    if (slide.body) {
+      elements.push(
+        text({
+          x: 120,
+          y: 390,
+          w: 1040,
+          h: 80,
+          text: slide.body,
+          color: '#86909c',
+          align: 'center',
+        })
+      );
+    }
+  } else if (layout === 'two-column') {
+    elements.push(
+      text({ x: 80, y: 60, w: 1120, h: 90, text: slide.title || '标题', fontSize: 44, bold: true })
+    );
+    elements.push(text({ x: 80, y: 180, w: 540, h: 460, text: slide.body ?? '' }));
+    elements.push(text({ x: 660, y: 180, w: 540, h: 460, text: slide.bodyRight ?? '' }));
+  } else {
+    elements.push(
+      text({ x: 80, y: 60, w: 1120, h: 90, text: slide.title || '标题', fontSize: 44, bold: true })
+    );
+    if (slide.body) elements.push(text({ x: 80, y: 180, w: 1120, h: 460, text: slide.body }));
+  }
+
+  if (slide.imageUrl) {
+    elements.push({
+      id: createId('el'),
+      type: 'image',
+      x: 760,
+      y: 360,
+      w: 400,
+      h: 260,
+      src: slide.imageUrl,
+    });
+  }
+  return elements;
 }
 
-export function PptEditor({ content, canWrite, documentId, shareToken, onChange }: PptEditorProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const slides = content.slides.length > 0 ? content.slides : [newSlide()];
-  const active = slides[Math.min(activeIndex, slides.length - 1)];
+export function PptEditor({ content, canWrite, onChange }: PptEditorProps) {
+  const [active, setActive] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scale, setScale] = useState(0.5);
+  const [presenting, setPresenting] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
+
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    id: string;
+    mode: 'move' | 'resize';
+    startX: number;
+    startY: number;
+    origin: SlideElement;
+  } | null>(null);
+
+  const slides = content.slides;
+  const slide = slides[Math.min(active, slides.length - 1)];
+  const elements = slide?.elements ?? [];
+
+  // 旧文档迁移一次
+  useEffect(() => {
+    if (content.slides.some((item) => !item.elements)) {
+      onChange({
+        ...content,
+        slides: content.slides.map((item) => ({ ...item, elements: migrateSlide(item) })),
+      });
+    }
+    // 只在挂载时迁移
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const calc = () => {
+      const host = stageRef.current;
+      if (!host) return;
+      const width = host.clientWidth - 48;
+      const height = host.clientHeight - 48;
+      setScale(Math.max(0.15, Math.min(width / SLIDE_WIDTH, height / SLIDE_HEIGHT)));
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
+
+  useEffect(() => {
+    if (!canWrite) return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        removeElement(selectedId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const updateSlides = (next: PptSlide[]) => onChange({ ...content, slides: next });
 
-  const updateActive = (patch: Partial<PptSlide>) => {
-    updateSlides(slides.map((slide, index) => (index === activeIndex ? { ...slide, ...patch } : slide)));
+  const patchSlide = (index: number, patch: Partial<PptSlide>) =>
+    updateSlides(slides.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+
+  const patchElement = (id: string, patch: Partial<SlideElement>) => {
+    patchSlide(active, {
+      elements: elements.map((item) =>
+        item.id === id ? ({ ...item, ...patch } as SlideElement) : item
+      ),
+    });
+  };
+
+  const addElement = (element: SlideElement) => {
+    patchSlide(active, { elements: [...elements, element] });
+    setSelectedId(element.id);
+  };
+
+  const addText = () =>
+    addElement({
+      id: createId('el'),
+      type: 'text',
+      x: 160,
+      y: 280,
+      w: 960,
+      h: 100,
+      text: '双击右侧文本框编辑文字',
+      fontSize: 40,
+      color: '#1b1f24',
+      bold: false,
+      align: 'left',
+    });
+
+  const addShape = (type: 'rect' | 'ellipse') =>
+    addElement({
+      id: createId('el'),
+      type,
+      x: 420,
+      y: 240,
+      w: 440,
+      h: 240,
+      fill: '#3370ff',
+      radius: 16,
+    } as SlideShapeElement);
+
+  const addImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      addElement({
+        id: createId('el'),
+        type: 'image',
+        x: 340,
+        y: 200,
+        w: 600,
+        h: 337,
+        src: String(reader.result),
+      });
+    reader.readAsDataURL(file);
+  };
+
+  const removeElement = (id: string) => {
+    patchSlide(active, { elements: elements.filter((item) => item.id !== id) });
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const duplicateElement = (id: string) => {
+    const source = elements.find((item) => item.id === id);
+    if (!source) return;
+    const copy = { ...source, id: createId('el'), x: source.x + 24, y: source.y + 24 };
+    patchSlide(active, { elements: [...elements, copy] });
+    setSelectedId(copy.id);
+  };
+
+  const moveElement = (id: string, direction: 1 | -1) => {
+    const index = elements.findIndex((item) => item.id === id);
+    const next = index + direction;
+    if (index < 0 || next < 0 || next >= elements.length) return;
+    const copy = [...elements];
+    [copy[index], copy[next]] = [copy[next], copy[index]];
+    patchSlide(active, { elements: copy });
   };
 
   const addSlide = () => {
-    const next = [...slides, newSlide()];
-    updateSlides(next);
-    setActiveIndex(next.length - 1);
+    const next: PptSlide = {
+      id: createId('slide'),
+      background: '#ffffff',
+      elements: [
+        {
+          id: createId('el'),
+          type: 'text',
+          x: 140,
+          y: 300,
+          w: 1000,
+          h: 100,
+          text: '新页面',
+          fontSize: 56,
+          color: '#1b1f24',
+          bold: true,
+          align: 'center',
+        },
+      ],
+    };
+    updateSlides([...slides, next]);
+    setActive(slides.length);
+    setSelectedId(null);
   };
 
-  const removeSlide = (index: number) => {
+  const duplicateSlide = () => {
+    const source = slides[active];
+    if (!source) return;
+    const copy: PptSlide = {
+      ...source,
+      id: createId('slide'),
+      elements: (source.elements ?? []).map((item) => ({ ...item, id: createId('el') })),
+    };
+    updateSlides([...slides.slice(0, active + 1), copy, ...slides.slice(active + 1)]);
+    setActive(active + 1);
+  };
+
+  const removeSlide = () => {
     if (slides.length <= 1) return;
-    const next = slides.filter((_, i) => i !== index);
-    updateSlides(next);
-    setActiveIndex(Math.max(0, Math.min(activeIndex, next.length - 1)));
+    updateSlides(slides.filter((_, i) => i !== active));
+    setActive(Math.max(0, active - 1));
+    setSelectedId(null);
   };
 
-  const moveSlide = (index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= slides.length) return;
-    const next = [...slides];
-    [next[index], next[target]] = [next[target], next[index]];
-    updateSlides(next);
-    setActiveIndex(target);
+  const onPointerDown = (event: React.PointerEvent, element: SlideElement, mode: 'move' | 'resize') => {
+    if (!canWrite) return;
+    event.stopPropagation();
+    setSelectedId(element.id);
+    dragRef.current = {
+      id: element.id,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: { ...element },
+    };
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
   };
 
-  const uploadImage = async (file: File) => {
-    setUploading(true);
-    try {
-      const asset = await assetApi.upload(file, {
-        documentId: documentId ?? undefined,
-        shareToken: shareToken ?? undefined,
+  const onPointerMove = (event: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = (event.clientX - drag.startX) / scale;
+    const dy = (event.clientY - drag.startY) / scale;
+    if (drag.mode === 'move') {
+      patchElement(drag.id, {
+        x: Math.round(drag.origin.x + dx),
+        y: Math.round(drag.origin.y + dy),
       });
-      updateActive({ imageUrl: asset.url });
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : '图片上传失败');
-    } finally {
-      setUploading(false);
+    } else {
+      patchElement(drag.id, {
+        w: Math.max(40, Math.round(drag.origin.w + dx)),
+        h: Math.max(30, Math.round(drag.origin.h + dy)),
+      });
     }
   };
 
-  return (
-    <div className={pptStyles.wrap}>
-      <div className={pptStyles.sidebar}>
-        <div className={pptStyles.slideList}>
-          {slides.map((slide, index) => (
-            <div
-              key={slide.id}
-              className={`${pptStyles.slideThumb} ${index === activeIndex ? pptStyles.slideThumbActive : ''}`}
-              onClick={() => setActiveIndex(index)}
-            >
-              <div className={pptStyles.slideIndex}>{index + 1}</div>
-              <div className={pptStyles.slideThumbInner}>
-                <div className={pptStyles.slideThumbTitle}>{slide.title || '未命名幻灯片'}</div>
-                <div className={pptStyles.slideThumbBody}>{slide.body}</div>
-              </div>
-            </div>
-          ))}
+  const onPointerUp = () => {
+    dragRef.current = null;
+  };
+
+  const selected = elements.find((item) => item.id === selectedId) ?? null;
+
+  const renderElement = (element: SlideElement) => {
+    if (element.type === 'text') {
+      return (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            color: element.color,
+            fontSize: element.fontSize * scale,
+            fontWeight: element.bold ? 700 : 400,
+            textAlign: element.align,
+            lineHeight: 1.35,
+            whiteSpace: 'pre-wrap',
+            pointerEvents: 'none',
+          }}
+        >
+          {element.text}
         </div>
+      );
+    }
+    if (element.type === 'image') {
+      return (
+        <img
+          src={element.src}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+        />
+      );
+    }
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: element.fill,
+          borderRadius: element.type === 'rect' ? (element.radius ?? 0) * scale : '50%',
+          pointerEvents: 'none',
+        }}
+      />
+    );
+  };
+
+  if (!slide) return <div className={styles.hint}>没有幻灯片</div>;
+
+  const presentSlide = slides[Math.min(presentIndex, slides.length - 1)];
+
+  return (
+    <div className={styles.wrap}>
+      <div className={styles.rail}>
+        {slides.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`${styles.railItem} ${index === active ? styles.railItemActive : ''}`}
+            onClick={() => {
+              setActive(index);
+              setSelectedId(null);
+            }}
+          >
+            <span className={styles.railIndex}>{index + 1}</span>
+            <div className={styles.railThumb} style={{ background: item.background ?? '#fff' }}>
+              <SlidePreview slide={item} />
+            </div>
+          </button>
+        ))}
         {canWrite ? (
-          <div className={pptStyles.sidebarFooter}>
-            <button className={`${commonStyles.button} ${commonStyles.buttonSm}`} onClick={addSlide}>
-              + 新建
-            </button>
-            <button
-              className={`${commonStyles.button} ${commonStyles.buttonSm} ${commonStyles.buttonDanger}`}
-              onClick={() => removeSlide(activeIndex)}
-              disabled={slides.length <= 1}
-            >
-              删除
-            </button>
-            <button className={`${commonStyles.button} ${commonStyles.buttonSm}`} onClick={() => moveSlide(activeIndex, -1)}>
-              ↑
-            </button>
-            <button className={`${commonStyles.button} ${commonStyles.buttonSm}`} onClick={() => moveSlide(activeIndex, 1)}>
-              ↓
-            </button>
-          </div>
+          <button type="button" className={styles.railAdd} onClick={addSlide}>
+            + 新建页面
+          </button>
         ) : null}
       </div>
 
-      <div className={pptStyles.main}>
-        <div className={pptStyles.canvasArea}>
-          <div
-            className={pptStyles.slideCanvas}
-            style={{
-              background: active.background || '#fff',
-              ...(active.layout === 'title' ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}),
-            }}
-          >
-            {active.layout === 'title' ? (
-              <>
-                <div className={pptStyles.titleText}>{active.title || '标题'}</div>
-                <div className={pptStyles.bodyText}>{active.body}</div>
-              </>
-            ) : active.layout === 'two-column' ? (
-              <>
-                <div className={pptStyles.titleText} style={{ fontSize: 22, marginBottom: 14 }}>
-                  {active.title}
-                </div>
-                <div className={pptStyles.twoColumn}>
-                  <div className={pptStyles.twoColumnPane}>{active.body}</div>
-                  <div className={pptStyles.twoColumnPane}>{active.bodyRight}</div>
-                </div>
-              </>
-            ) : active.layout === 'blank' ? (
-              <div className={pptStyles.blankImage}>
-                {active.imageUrl ? <img src={active.imageUrl} alt="" /> : <span style={{ color: '#9aa4b2' }}>暂无图片</span>}
-              </div>
-            ) : (
-              <>
-                <div className={pptStyles.titleText} style={{ fontSize: 24, marginBottom: 14 }}>
-                  {active.title}
-                </div>
-                <div style={{ display: 'flex', gap: 20, flex: 1 }}>
-                  <div className={pptStyles.bodyText} style={{ flex: 1 }}>
-                    {active.body}
-                  </div>
-                  {active.imageUrl ? <img className={pptStyles.slideImage} src={active.imageUrl} alt="" /> : null}
-                </div>
-              </>
-            )}
-          </div>
+      <div className={styles.stage} ref={stageRef} onClick={() => setSelectedId(null)}>
+        <div
+          className={styles.canvas}
+          style={{
+            width: SLIDE_WIDTH * scale,
+            height: SLIDE_HEIGHT * scale,
+            background: slide.background ?? '#ffffff',
+          }}
+        >
+          {elements.map((element) => (
+            <div
+              key={element.id}
+              className={`${styles.element} ${selectedId === element.id ? styles.elementActive : ''}`}
+              style={{
+                left: element.x * scale,
+                top: element.y * scale,
+                width: element.w * scale,
+                height: element.h * scale,
+              }}
+              onPointerDown={(event) => onPointerDown(event, element, 'move')}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedId(element.id);
+              }}
+            >
+              {renderElement(element)}
+              {canWrite && selectedId === element.id ? (
+                <span
+                  className={styles.handle}
+                  onPointerDown={(event) => onPointerDown(event, element, 'resize')}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                />
+              ) : null}
+            </div>
+          ))}
         </div>
       </div>
 
-      {canWrite ? (
-        <div className={pptStyles.propPanel}>
-          <div className={commonStyles.field}>
-            <span className={commonStyles.label}>布局</span>
-            <select
-              className={commonStyles.select}
-              value={active.layout}
-              onChange={(event) => updateActive({ layout: event.target.value as SlideLayout })}
-            >
-              {Object.entries(LAYOUT_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={commonStyles.field}>
-            <span className={commonStyles.label}>标题</span>
-            <input className={commonStyles.input} value={active.title} onChange={(event) => updateActive({ title: event.target.value })} />
-          </div>
-
-          {active.layout !== 'blank' ? (
-            <div className={commonStyles.field}>
-              <span className={commonStyles.label}>{active.layout === 'two-column' ? '左侧内容' : '正文'}</span>
-              <textarea
-                className={commonStyles.textarea}
-                style={{ minHeight: 100 }}
-                value={active.body}
-                onChange={(event) => updateActive({ body: event.target.value })}
-              />
+      <aside className={styles.props}>
+        {canWrite ? (
+          <>
+            <div className={styles.propActions} style={{ marginBottom: 12 }}>
+              <button type="button" className={styles.propButton} onClick={addText}>
+                文字
+              </button>
+              <button type="button" className={styles.propButton} onClick={() => addShape('rect')}>
+                矩形
+              </button>
+              <button type="button" className={styles.propButton} onClick={() => addShape('ellipse')}>
+                圆形
+              </button>
+              <label className={styles.propButton} style={{ cursor: 'pointer' }}>
+                图片
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) addImage(file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
             </div>
-          ) : null}
 
-          {active.layout === 'two-column' ? (
-            <div className={commonStyles.field}>
-              <span className={commonStyles.label}>右侧内容</span>
-              <textarea
-                className={commonStyles.textarea}
-                style={{ minHeight: 100 }}
-                value={active.bodyRight ?? ''}
-                onChange={(event) => updateActive({ bodyRight: event.target.value })}
-              />
-            </div>
-          ) : null}
-
-          <div className={commonStyles.field}>
-            <span className={commonStyles.label}>背景色</span>
-            <input
-              type="color"
-              value={active.background || '#ffffff'}
-              onChange={(event) => updateActive({ background: event.target.value })}
-            />
-          </div>
-
-          {active.layout === 'blank' || active.layout === 'title-body' ? (
-            <div className={commonStyles.field}>
-              <span className={commonStyles.label}>图片</span>
+            <div className={styles.propField}>
+              <span>背景色</span>
               <input
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadImage(file);
-                  event.target.value = '';
-                }}
+                className={styles.propInput}
+                type="color"
+                value={slide.background ?? '#ffffff'}
+                onChange={(event) => patchSlide(active, { background: event.target.value })}
               />
-              {active.imageUrl ? (
-                <button className={`${commonStyles.button} ${commonStyles.buttonSm}`} onClick={() => updateActive({ imageUrl: undefined })}>
-                  移除图片
-                </button>
-              ) : null}
             </div>
+          </>
+        ) : null}
+
+        {selected ? (
+          <>
+            <div className={styles.propField}>
+              <span>位置与大小</span>
+              <div className={styles.propRow}>
+                {(['x', 'y', 'w', 'h'] as const).map((key) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12 }}>{key.toUpperCase()}</span>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      value={Math.round(selected[key])}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { [key]: Number(event.target.value) } as never)
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {selected.type === 'text' ? (
+              <>
+                <div className={styles.propField}>
+                  <span>文字</span>
+                  <textarea
+                    className={styles.propInput}
+                    style={{ minHeight: 84, resize: 'vertical' }}
+                    value={selected.text}
+                    disabled={!canWrite}
+                    onChange={(event) => patchElement(selected.id, { text: event.target.value } as never)}
+                  />
+                </div>
+                <div className={styles.propField}>
+                  <span>字号 / 颜色</span>
+                  <div className={styles.propRow}>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      value={selected.fontSize}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { fontSize: Number(event.target.value) } as never)
+                      }
+                    />
+                    <input
+                      className={styles.propInput}
+                      type="color"
+                      value={selected.color}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { color: event.target.value } as never)
+                      }
+                    />
+                  </div>
+                </div>
+                <div className={styles.propActions}>
+                  {(['left', 'center', 'right'] as const).map((align) => (
+                    <button
+                      key={align}
+                      type="button"
+                      className={styles.propButton}
+                      onClick={() => patchElement(selected.id, { align } as never)}
+                    >
+                      {align === 'left' ? '左' : align === 'center' ? '中' : '右'}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={styles.propButton}
+                    onClick={() => patchElement(selected.id, { bold: !selected.bold } as never)}
+                  >
+                    {selected.bold ? '取消加粗' : '加粗'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {selected.type === 'rect' || selected.type === 'ellipse' ? (
+              <div className={styles.propField}>
+                <span>填充色</span>
+                <input
+                  className={styles.propInput}
+                  type="color"
+                  value={selected.fill}
+                  disabled={!canWrite}
+                  onChange={(event) => patchElement(selected.id, { fill: event.target.value } as never)}
+                />
+              </div>
+            ) : null}
+
+            {canWrite ? (
+              <div className={styles.propActions}>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  onClick={() => moveElement(selected.id, -1)}
+                >
+                  下移
+                </button>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  onClick={() => moveElement(selected.id, 1)}
+                >
+                  上移
+                </button>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  onClick={() => duplicateElement(selected.id)}
+                >
+                  复制
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.propButton} ${styles.propButtonDanger}`}
+                  onClick={() => removeElement(selected.id)}
+                >
+                  删除
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className={styles.hint}>选中画布中的元素后可调整位置与样式。</p>
+        )}
+
+        <div className={styles.propActions} style={{ marginTop: 14 }}>
+          <button
+            type="button"
+            className={styles.propButton}
+            onClick={() => {
+              setPresentIndex(active);
+              setPresenting(true);
+            }}
+          >
+            放映
+          </button>
+          {canWrite ? (
+            <>
+              <button type="button" className={styles.propButton} onClick={duplicateSlide}>
+                复制页
+              </button>
+              <button
+                type="button"
+                className={`${styles.propButton} ${styles.propButtonDanger}`}
+                onClick={removeSlide}
+              >
+                删除页
+              </button>
+            </>
           ) : null}
+        </div>
+      </aside>
+
+      {presenting ? (
+        <div
+          className={styles.present}
+          onClick={() => setPresentIndex((index) => Math.min(slides.length - 1, index + 1))}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setPresenting(false);
+          }}
+          tabIndex={-1}
+          ref={(node) => node?.focus()}
+        >
+          <div
+            className={styles.presentSlide}
+            style={{ background: presentSlide.background ?? '#fff' }}
+          >
+            {(presentSlide.elements ?? []).map((element) => (
+              <div
+                key={element.id}
+                style={{
+                  position: 'absolute',
+                  left: `${(element.x / SLIDE_WIDTH) * 100}%`,
+                  top: `${(element.y / SLIDE_HEIGHT) * 100}%`,
+                  width: `${(element.w / SLIDE_WIDTH) * 100}%`,
+                  height: `${(element.h / SLIDE_HEIGHT) * 100}%`,
+                }}
+              >
+                {renderElement({ ...element, x: 0, y: 0, w: 0, h: 0 } as SlideElement)}
+              </div>
+            ))}
+          </div>
+          <div className={styles.presentBar}>
+            <span>
+              {presentIndex + 1} / {slides.length}
+            </span>
+            <button
+              type="button"
+              className={styles.propButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPresenting(false);
+              }}
+            >
+              退出
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** 缩略图：用与原画布相同的比例渲染 */
+function SlidePreview({ slide }: { slide: PptSlide }) {
+  const elements = slide.elements ?? [];
+  return (
+    <>
+      {elements.map((element) => (
+        <div
+          key={element.id}
+          style={{
+            position: 'absolute',
+            left: `${(element.x / SLIDE_WIDTH) * 100}%`,
+            top: `${(element.y / SLIDE_HEIGHT) * 100}%`,
+            width: `${(element.w / SLIDE_WIDTH) * 100}%`,
+            height: `${(element.h / SLIDE_HEIGHT) * 100}%`,
+            overflow: 'hidden',
+          }}
+        >
+          {element.type === 'text' ? (
+            <span
+              style={{
+                display: 'block',
+                fontSize: 6,
+                color: element.color,
+                textAlign: element.align,
+                fontWeight: element.bold ? 700 : 400,
+                lineHeight: 1.2,
+              }}
+            >
+              {element.text}
+            </span>
+          ) : element.type === 'image' ? (
+            <img src={element.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                background: element.fill,
+                borderRadius: element.type === 'rect' ? 2 : '50%',
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </>
   );
 }

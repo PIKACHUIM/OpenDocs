@@ -34,7 +34,9 @@ export function UniverSheetEditor({ content, canWrite, onChange }: ExcelEditorPr
         [LocaleType.ZH_CN]: merge({}, zhCN),
         [LocaleType.EN_US]: merge({}, enUS),
       },
-      presets: [UniverSheetsCorePreset({ container: host })],
+      // header/footer 关掉：去掉 Univer 自带的顶部品牌栏与底部状态栏，
+      // 外壳统一由 OpenDocs 的 DocumentShell 提供
+      presets: [UniverSheetsCorePreset({ container: host, header: false, footer: false })],
     });
 
     const snapshot = contentRef.current.univer as Partial<IWorkbookData> | undefined;

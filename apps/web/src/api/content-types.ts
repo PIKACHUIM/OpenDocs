@@ -61,16 +61,51 @@ export interface ExcelContent {
   univer?: unknown;
 }
 
+/** 旧版版式（仅用于迁移历史文档） */
 export type SlideLayout = 'title' | 'title-body' | 'two-column' | 'blank';
+
+interface SlideElementBase {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface SlideTextElement extends SlideElementBase {
+  type: 'text';
+  text: string;
+  fontSize: number;
+  color: string;
+  bold: boolean;
+  align: 'left' | 'center' | 'right';
+}
+
+export interface SlideShapeElement extends SlideElementBase {
+  type: 'rect' | 'ellipse';
+  fill: string;
+  radius?: number;
+}
+
+export interface SlideImageElement extends SlideElementBase {
+  type: 'image';
+  src: string;
+}
+
+export type SlideElement = SlideTextElement | SlideShapeElement | SlideImageElement;
 
 export interface PptSlide {
   id: string;
-  layout: SlideLayout;
-  title: string;
-  body: string;
+  background?: string;
+  /** 自由画布元素；新文档使用 */
+  elements?: SlideElement[];
+
+  // ---- 以下为旧版字段，仅用于把历史文档迁移成 elements ----
+  layout?: SlideLayout;
+  title?: string;
+  body?: string;
   bodyRight?: string;
   imageUrl?: string;
-  background?: string;
 }
 
 export interface PptContent {
@@ -78,6 +113,10 @@ export interface PptContent {
   version: number;
   slides: PptSlide[];
 }
+
+/** 幻灯片设计尺寸（16:9），画布与导出共用同一坐标系 */
+export const SLIDE_WIDTH = 1280;
+export const SLIDE_HEIGHT = 720;
 
 export type DocumentContent = MindmapContent | MarkdownContent | WordContent | ExcelContent | PptContent;
 
@@ -109,7 +148,40 @@ export function emptyContentFor(type: DocumentType): DocumentContent {
       return {
         type,
         version: 1,
-        slides: [{ id: createId('slide'), layout: 'title', title: '标题页', body: '' }],
+        slides: [
+          {
+            id: createId('slide'),
+            background: '#ffffff',
+            elements: [
+              {
+                id: createId('el'),
+                type: 'text',
+                x: 140,
+                y: 280,
+                w: 1000,
+                h: 120,
+                text: '标题页',
+                fontSize: 64,
+                color: '#1b1f24',
+                bold: true,
+                align: 'center',
+              },
+              {
+                id: createId('el'),
+                type: 'text',
+                x: 140,
+                y: 410,
+                w: 1000,
+                h: 70,
+                text: '点击右侧属性调整文字与样式',
+                fontSize: 28,
+                color: '#86909c',
+                bold: false,
+                align: 'center',
+              },
+            ],
+          },
+        ],
       };
     default:
       throw new Error(`未知的文档类型: ${type}`);
