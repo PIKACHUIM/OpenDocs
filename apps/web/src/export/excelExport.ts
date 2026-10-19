@@ -27,15 +27,93 @@ function toArgb(color: string | undefined): string | null {
   return null;
 }
 
+/** Univer 工作簿快照里我们导出时用到的字段 */
+interface UniverCell {
+  v?: unknown;
+  f?: string;
+}
+
+interface UniverSheet {
+  id: string;
+  name?: string;
+  cellData?: Record<string, Record<string, UniverCell>>;
+  mergeData?: Array<{
+    startRow: number;
+    startColumn: number;
+    endRow: number;
+    endColumn: number;
+  }>;
+}
+
+interface UniverWorkbook {
+  sheetOrder?: string[];
+  sheets?: Record<string, UniverSheet>;
+}
+
 /**
- * 导出 Excel：把 Fortune Sheet 的 celldata（Cell 对象原样存在 content.sheets 里）
- * 转成 ExcelJS 的工作簿。覆盖最常用的样式：值、粗体、斜体、字号、字体色、背景色。
- * 公式（f 字段）、条件格式、数据验证等高级特性不在本次范围内。
+ * 导出 Excel。
+ *
+ * 两种内容格式都支持：
+ * - Univer 文档（新）→ 读 IWorkbookData，导出值与公式、合并单元格
+ * - FortuneSheet 文档（历史）→ 读 celldata，额外还原常用样式
+ *
+ * 样式（字体/底色/数字格式）在 Univer 分支里暂不还原：快照中的样式是索引引用，
+ * 需要同时解析 workbook.styles 表，收益不高，先保证数据与公式不丢。
  */
 export async function exportExcelToXlsx(content: ExcelContent, title: string) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Drawnix';
+  workbook.creator = 'OpenDocs';
   workbook.created = new Date();
+
+  const snapshot = content.univer as UniverWorkbook | undefined;
+  if (snapshot?.sheets && Object.keys(snapshot.sheets).length > 0) {
+    const order = snapshot.sheetOrder ?? Object.keys(snapshot.sheets);
+    for (const sheetId of order) {
+      const sheet = snapshot.sheets[sheetId];
+      if (!sheet) continue;
+      const worksheet = workbook.addWorksheet(sheet.name || 'Sheet');
+      const cellData = sheet.cellData ?? {};
+
+      for (const [rowKey, row] of Object.entries(cellData)) {
+        for (const [colKey, cell] of Object.entries(row ?? {})) {
+          if (!cell) continue;
+          const r = Number(rowKey) + 1;
+          const c = Number(colKey) + 1;
+          const target = worksheet.getCell(r, c);
+          const value = cell.v;
+          if (cell.f) {
+            target.value = {
+              formula: cell.f.startsWith('=') ? cell.f.slice(1) : cell.f,
+              result: typeof value === 'number' || typeof value === 'string' ? value : undefined,
+            } as ExcelJS.CellFormulaValue;
+            continue;
+          }
+          if (value === undefined || value === null || value === '') continue;
+          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            target.value = value;
+          }
+        }
+      }
+
+      for (const merge of sheet.mergeData ?? []) {
+        worksheet.mergeCells(
+          merge.startRow + 1,
+          merge.startColumn + 1,
+          merge.endRow + 1,
+          merge.endColumn + 1
+        );
+      }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadBlob(
+      new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      safeFileName(title, 'xlsx')
+    );
+    return;
+  }
 
   for (const sheet of content.sheets) {
     const worksheet = workbook.addWorksheet(sheet.name || 'Sheet', {
