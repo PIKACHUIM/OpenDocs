@@ -8,6 +8,12 @@ export const SETTINGS_KEYS = {
   allowRegistration: 'allow_registration',
   inviteRequired: 'invite_required',
   trashRetentionDays: 'trash_retention_days',
+  uploadAllowImage: 'upload_allow_image',
+  uploadAllowFile: 'upload_allow_file',
+  uploadMaxImageBytes: 'upload_max_image_bytes',
+  uploadMaxFileBytes: 'upload_max_file_bytes',
+  quotaUserBytes: 'quota_user_bytes',
+  quotaSystemBytes: 'quota_system_bytes',
   resendApiKey: 'resend_api_key',
   resendFrom: 'resend_from',
   turnstileEnabled: 'turnstile_enabled',
@@ -17,6 +23,12 @@ export const SETTINGS_KEYS = {
 
 const DEFAULT_TRASH_RETENTION_DAYS = 30;
 const MAX_TRASH_RETENTION_DAYS = 365;
+
+/** 上传与容量默认值：8MB 图片、32MB 附件、1GB/人、20GB 全站 */
+const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_FILE_BYTES = 32 * 1024 * 1024;
+const DEFAULT_USER_QUOTA_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_SYSTEM_QUOTA_BYTES = 20 * 1024 * 1024 * 1024;
 
 const TRUE = new Set(['1', 'true', 'yes', 'on']);
 const FALSE = new Set(['0', 'false', 'no', 'off']);
@@ -121,6 +133,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
       allowRegistration: await allowRegistration(db),
       inviteRequired: await inviteRequired(db),
       trashRetentionDays: await trashRetentionDays(db),
+      ...(await uploadPolicy(db)),
       resendApiKeySet: !!resend.apiKey,
       resendApiKeyMasked: maskSecret(resend.apiKey),
       resendFrom: resend.from,
@@ -131,6 +144,25 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
     };
   };
 
+  /**
+   * 上传与容量策略（管理后台可配，未配置时用默认值）。
+   */
+  const uploadPolicy = async (db?: Record<string, string>) => {
+    const data = db ?? (await load());
+    const readNumber = (key: string, fallback: number) => {
+      const value = Number.parseInt(String(data[key] ?? ''), 10);
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    };
+    return {
+      allowImage: parseBool(data[SETTINGS_KEYS.uploadAllowImage], true),
+      allowFile: parseBool(data[SETTINGS_KEYS.uploadAllowFile], true),
+      maxImageBytes: readNumber(SETTINGS_KEYS.uploadMaxImageBytes, DEFAULT_MAX_IMAGE_BYTES),
+      maxFileBytes: readNumber(SETTINGS_KEYS.uploadMaxFileBytes, DEFAULT_MAX_FILE_BYTES),
+      userQuotaBytes: readNumber(SETTINGS_KEYS.quotaUserBytes, DEFAULT_USER_QUOTA_BYTES),
+      systemQuotaBytes: readNumber(SETTINGS_KEYS.quotaSystemBytes, DEFAULT_SYSTEM_QUOTA_BYTES),
+    };
+  };
+
   return {
     load,
     siteName,
@@ -138,6 +170,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
     allowRegistration,
     inviteRequired,
     trashRetentionDays,
+    uploadPolicy,
     resendConfig,
     turnstileConfig,
     publicConfig,

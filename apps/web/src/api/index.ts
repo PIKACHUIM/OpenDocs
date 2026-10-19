@@ -225,6 +225,12 @@ export const adminApi = {
     allowRegistration?: boolean;
     inviteRequired?: boolean;
     trashRetentionDays?: number;
+    uploadAllowImage?: boolean;
+    uploadAllowFile?: boolean;
+    uploadMaxImageBytes?: number;
+    uploadMaxFileBytes?: number;
+    quotaUserBytes?: number;
+    quotaSystemBytes?: number;
     resendApiKey?: string | null;
     resendFrom?: string;
     turnstileEnabled?: boolean;

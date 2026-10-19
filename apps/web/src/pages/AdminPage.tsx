@@ -73,6 +73,13 @@ export function AdminPage() {
     allowRegistration: boolean;
     inviteRequired: boolean;
     trashRetentionDays: number;
+    /** 以下以 MB 编辑，提交时换算成字节 */
+    allowImage: boolean;
+    allowFile: boolean;
+    maxImageMB: number;
+    maxFileMB: number;
+    userQuotaMB: number;
+    systemQuotaMB: number;
     resendApiKey: string;
     resendFrom: string;
     turnstileEnabled: boolean;
@@ -120,6 +127,12 @@ export function AdminPage() {
         allowRegistration: data.allowRegistration,
         inviteRequired: data.inviteRequired,
         trashRetentionDays: data.trashRetentionDays,
+        allowImage: data.allowImage,
+        allowFile: data.allowFile,
+        maxImageMB: Math.round(data.maxImageBytes / 1024 / 1024),
+        maxFileMB: Math.round(data.maxFileBytes / 1024 / 1024),
+        userQuotaMB: Math.round(data.userQuotaBytes / 1024 / 1024),
+        systemQuotaMB: Math.round(data.systemQuotaBytes / 1024 / 1024),
         resendApiKey: '',
         resendFrom: data.resendFrom ?? '',
         turnstileEnabled: data.turnstileEnabled,
@@ -202,6 +215,12 @@ export function AdminPage() {
         allowRegistration: settingsForm.allowRegistration,
         inviteRequired: settingsForm.inviteRequired,
         trashRetentionDays: settingsForm.trashRetentionDays,
+        uploadAllowImage: settingsForm.allowImage,
+        uploadAllowFile: settingsForm.allowFile,
+        uploadMaxImageBytes: settingsForm.maxImageMB * 1024 * 1024,
+        uploadMaxFileBytes: settingsForm.maxFileMB * 1024 * 1024,
+        quotaUserBytes: settingsForm.userQuotaMB * 1024 * 1024,
+        quotaSystemBytes: settingsForm.systemQuotaMB * 1024 * 1024,
         resendApiKey: settingsForm.resendApiKey ? settingsForm.resendApiKey : undefined,
         resendFrom: settingsForm.resendFrom,
         turnstileEnabled: settingsForm.turnstileEnabled,
@@ -743,6 +762,92 @@ export function AdminPage() {
               <span className={styles.hint}>
                 「最近删除」中的文档超过该天数后，会在打开列表时自动彻底清理（含对象存储中的正文）。
               </span>
+            </div>
+
+            <h3 style={{ fontSize: 14, margin: '20px 0 10px' }}>上传与容量</h3>
+            <label className={styles.checkboxRow} style={{ marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                checked={settingsForm.allowImage}
+                onChange={(event) =>
+                  setSettingsForm({ ...settingsForm, allowImage: event.target.checked })
+                }
+              />
+              允许上传图片
+            </label>
+            <label className={styles.checkboxRow} style={{ marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                checked={settingsForm.allowFile}
+                onChange={(event) =>
+                  setSettingsForm({ ...settingsForm, allowFile: event.target.checked })
+                }
+              />
+              允许上传附件文件
+            </label>
+
+            <div className={styles.field}>
+              <span className={styles.label}>单张图片上限（MB）</span>
+              <input
+                className={styles.input}
+                type="number"
+                min={1}
+                value={settingsForm.maxImageMB}
+                onChange={(event) =>
+                  setSettingsForm({
+                    ...settingsForm,
+                    maxImageMB: Number.parseInt(event.target.value, 10) || 1,
+                  })
+                }
+              />
+            </div>
+
+            <div className={styles.field}>
+              <span className={styles.label}>单个附件上限（MB）</span>
+              <input
+                className={styles.input}
+                type="number"
+                min={1}
+                value={settingsForm.maxFileMB}
+                onChange={(event) =>
+                  setSettingsForm({
+                    ...settingsForm,
+                    maxFileMB: Number.parseInt(event.target.value, 10) || 1,
+                  })
+                }
+              />
+            </div>
+
+            <div className={styles.field}>
+              <span className={styles.label}>每个用户容量（MB，0 表示不限）</span>
+              <input
+                className={styles.input}
+                type="number"
+                min={0}
+                value={settingsForm.userQuotaMB}
+                onChange={(event) =>
+                  setSettingsForm({
+                    ...settingsForm,
+                    userQuotaMB: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+              />
+            </div>
+
+            <div className={styles.field}>
+              <span className={styles.label}>系统总容量（MB，0 表示不限）</span>
+              <input
+                className={styles.input}
+                type="number"
+                min={0}
+                value={settingsForm.systemQuotaMB}
+                onChange={(event) =>
+                  setSettingsForm({
+                    ...settingsForm,
+                    systemQuotaMB: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+              />
             </div>
 
             <h3 style={{ fontSize: 14, margin: '20px 0 10px' }}>Resend 邮件配置</h3>

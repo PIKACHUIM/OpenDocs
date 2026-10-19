@@ -1010,7 +1010,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 50;
+  z-index: 1200;
   min-width: 168px;
   @include card;
   border-radius: $radius;

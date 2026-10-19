@@ -189,6 +189,12 @@ adminRoutes.patch('/settings', async (c) => {
     allowRegistration?: unknown;
     inviteRequired?: unknown;
     trashRetentionDays?: unknown;
+    uploadAllowImage?: unknown;
+    uploadAllowFile?: unknown;
+    uploadMaxImageBytes?: unknown;
+    uploadMaxFileBytes?: unknown;
+    quotaUserBytes?: unknown;
+    quotaSystemBytes?: unknown;
     resendApiKey?: unknown;
     resendFrom?: unknown;
     turnstileEnabled?: unknown;
@@ -207,6 +213,28 @@ adminRoutes.patch('/settings', async (c) => {
       entries[key] = value;
     }
   };
+
+  // 上传开关
+  if (typeof body.uploadAllowImage === 'boolean') {
+    entries[SETTINGS_KEYS.uploadAllowImage] = body.uploadAllowImage ? 'true' : 'false';
+  }
+  if (typeof body.uploadAllowFile === 'boolean') {
+    entries[SETTINGS_KEYS.uploadAllowFile] = body.uploadAllowFile ? 'true' : 'false';
+  }
+
+  // 体积与配额（前端以字节提交）
+  const byteFields: Array<[unknown, string, number]> = [
+    [body.uploadMaxImageBytes, SETTINGS_KEYS.uploadMaxImageBytes, 1],
+    [body.uploadMaxFileBytes, SETTINGS_KEYS.uploadMaxFileBytes, 1],
+    [body.quotaUserBytes, SETTINGS_KEYS.quotaUserBytes, 0],
+    [body.quotaSystemBytes, SETTINGS_KEYS.quotaSystemBytes, 0],
+  ];
+  for (const [raw, key, min] of byteFields) {
+    if (raw === undefined) continue;
+    const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10);
+    if (!Number.isFinite(value) || value < min) throw badRequest('容量设置不合法');
+    entries[key] = String(Math.floor(value));
+  }
 
   setOrClear(SETTINGS_KEYS.siteName, body.siteName);
   setOrClear(SETTINGS_KEYS.siteUrl, body.siteUrl);

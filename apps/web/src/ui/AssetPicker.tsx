@@ -23,6 +23,7 @@ export function AssetPicker({ open, onClose, onSelect, documentId, shareToken }:
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
 
   const load = useCallback(async () => {
     if (!open) return;
@@ -109,6 +110,43 @@ export function AssetPicker({ open, onClose, onSelect, documentId, shareToken }:
             />
           </label>
         </div>
+      </div>
+
+      <div className={styles.row} style={{ marginBottom: 14 }}>
+        <input
+          className={styles.input}
+          style={{ flex: 1 }}
+          placeholder="或直接粘贴图片 URL（https://…）"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && url.trim()) {
+              onSelect({
+                id: `url_${Date.now()}`,
+                url: url.trim(),
+                contentType: 'image/*',
+                sizeBytes: 0,
+              });
+              onClose();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className={styles.button}
+          disabled={!url.trim()}
+          onClick={() => {
+            onSelect({
+              id: `url_${Date.now()}`,
+              url: url.trim(),
+              contentType: 'image/*',
+              sizeBytes: 0,
+            });
+            onClose();
+          }}
+        >
+          按 URL 插入
+        </button>
       </div>
 
       {error ? <div className={styles.error}>{error}</div> : null}

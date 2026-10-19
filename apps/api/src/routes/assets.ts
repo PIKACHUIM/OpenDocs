@@ -41,8 +41,13 @@ assetRoutes.post('/', async (c) => {
   const form = await c.req.parseBody();
   const file = form['file'];
   if (!(file instanceof File)) throw badRequest('缺少文件字段 file');
-  if (file.size > MAX_ASSET_BYTES) {
-    throw badRequest(`文件过大（上限 ${(MAX_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB）`);
+
+  const policy = await c.get('settings').uploadPolicy();
+  if (!policy.allowImage) throw forbidden('管理员已关闭图片上传');
+
+  const limit = Math.min(MAX_ASSET_BYTES, policy.maxImageBytes);
+  if (file.size > limit) {
+    throw badRequest(`文件过大（上限 ${(limit / 1024 / 1024).toFixed(1)}MB）`);
   }
   const contentType = file.type || 'application/octet-stream';
   if (!ALLOWED_TYPES.has(contentType)) {

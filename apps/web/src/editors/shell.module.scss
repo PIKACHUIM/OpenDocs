@@ -14,7 +14,9 @@
   border-bottom: 1px solid #e4e7ec;
   flex-shrink: 0;
   background: #fff;
-  z-index: 10;
+  // 必须高于编辑器内部工具栏（Univer 的 header 层级很高），
+  // 否则「导出」下拉会被编辑器工具条盖住，点不到
+  z-index: 500;
 }
 
 .icon {

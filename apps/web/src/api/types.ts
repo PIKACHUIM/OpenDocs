@@ -87,6 +87,13 @@ export interface AdminSettings {
   inviteRequired: boolean;
   /** 「最近删除」保留天数，1–365 */
   trashRetentionDays: number;
+  /** 上传策略 */
+  allowImage: boolean;
+  allowFile: boolean;
+  maxImageBytes: number;
+  maxFileBytes: number;
+  userQuotaBytes: number;
+  systemQuotaBytes: number;
   resendApiKeySet: boolean;
   resendApiKeyMasked: string | null;
   resendFrom: string | null;

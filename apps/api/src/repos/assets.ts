@@ -63,6 +63,12 @@ export function createAssetRepo(sql: SqlClient) {
     return row?.n ?? 0;
   };
 
+  /** 全站已用容量，用于系统总配额校验 */
+  const sumAllSize = async (): Promise<number> => {
+    const row = await sql.first<{ n: number }>('SELECT SUM(size_bytes) AS n FROM assets');
+    return row?.n ?? 0;
+  };
+
   const sumSizeByOwner = async (ownerId: string): Promise<number> => {
     const row = await sql.first<{ n: number }>(
       'SELECT SUM(size_bytes) AS n FROM assets WHERE owner_id = ?',
@@ -78,6 +84,7 @@ export function createAssetRepo(sql: SqlClient) {
     listByDocument,
     listByOwner,
     countByOwner,
+    sumAllSize,
     sumSizeByOwner,
   };
 }

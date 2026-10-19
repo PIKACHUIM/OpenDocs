@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import localforage from 'localforage';
 import { navigate } from '../lib/router';
 import { AssetPicker } from '../ui/AssetPicker';
 import styles from '../ui/common.module.scss';
@@ -46,6 +47,8 @@ const PRESETS = [
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `l_${Date.now()}_${Math.random()}`);
 
+const IMAGE_DRAFT_KEY = 'opendocs_image_draft';
+
 /**
  * 图片编辑（React 实现的首版）。
  *
@@ -60,6 +63,8 @@ export function ImageEditorPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(
@@ -67,6 +72,41 @@ export function ImageEditorPage() {
   );
 
   const current = useMemo(() => layers.find((layer) => layer.id === selected) ?? null, [layers, selected]);
+
+  // 自动保存：图片编辑目前是独立工具页，草稿存浏览器（刷新/重开不丢）。
+  // 云端文档化需要新增文档类型，属于后续改造。
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const draft = await localforage.getItem<{
+        size: { w: number; h: number };
+        background: string;
+        layers: Layer[];
+      }>(IMAGE_DRAFT_KEY);
+      if (cancelled) return;
+      if (draft) {
+        setSize(draft.size);
+        setBackground(draft.background);
+        setLayers(draft.layers);
+      }
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    setSaveState('saving');
+    const timer = window.setTimeout(() => {
+      void localforage
+        .setItem(IMAGE_DRAFT_KEY, { size, background, layers })
+        .then(() => setSaveState('saved'))
+        .catch(() => setSaveState('idle'));
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [draftReady, size, background, layers]);
 
   // 预览按容器宽度等比缩放
   const [scale, setScale] = useState(0.4);
@@ -371,6 +411,9 @@ export function ImageEditorPage() {
           ← 返回
         </button>
         <span className={styles.imageTitle}>图片编辑</span>
+        <span className={styles.hint} style={{ marginLeft: 8 }}>
+          {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存到本地' : ''}
+        </span>
         <span className={styles.grow} />
         <button type="button" className={styles.button} onClick={() => applyTemplate('cover')}>
           封面模板

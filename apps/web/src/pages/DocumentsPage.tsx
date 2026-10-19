@@ -6,6 +6,7 @@ import {
   folderApi,
   type ApiDocument,
   type ApiFolder,
+  type DocumentContent,
   type DocumentType,
 } from '../api';
 import { navigate } from '../lib/router';
@@ -237,6 +238,55 @@ export function DocumentsPage() {
       await loadFolders();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '创建目录失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * 导入本地文件：
+   * - .md / .markdown / .txt → Markdown 文档
+   * - .drawnix / .json → 若是我们的内容结构直接用；若是白板导出的 children 列表则转成思维导图
+   */
+  const importFile = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const title = file.name.replace(/\.[^.]+$/, '') || '导入的文档';
+      let type: DocumentType = 'markdown';
+      let content: DocumentContent = { type: 'markdown', version: 1, markdown: text, mindmaps: {} };
+
+      if (/\.(md|markdown|txt)$/i.test(file.name)) {
+        type = 'markdown';
+        content = { type, version: 1, markdown: text, mindmaps: {} };
+      } else {
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        if (typeof parsed.type === 'string' && typeof parsed.version === 'number') {
+          type = parsed.type as DocumentType;
+          content = parsed as unknown as DocumentContent;
+        } else if (Array.isArray(parsed.children)) {
+          type = 'mindmap';
+          content = {
+            type,
+            version: 1,
+            elements: parsed.children,
+            viewport: parsed.viewport ?? { zoom: 1 },
+            theme: parsed.theme,
+          } as unknown as DocumentContent;
+        } else {
+          throw new Error('无法识别的文件结构');
+        }
+      }
+
+      const data = await documentApi.create({ type, title, content, folderId });
+      navigate(`/d/${data.document.id}`);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : '导入失败：仅支持 .md / .txt / .drawnix / .json'
+      );
     } finally {
       setBusy(false);
     }
@@ -514,6 +564,23 @@ export function DocumentsPage() {
           <button type="button" className={styles.sidebarNew} onClick={() => setCreateOpen(true)}>
             + 新建
           </button>
+          <label
+            className={styles.sidebarItem}
+            style={{ cursor: 'pointer', marginBottom: 8 }}
+            title="支持 .md / .txt / .drawnix / .json"
+          >
+            <span className={styles.sidebarItemText}>导入文件</span>
+            <input
+              type="file"
+              accept=".md,.markdown,.txt,.json,.drawnix"
+              style={{ display: 'none' }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void importFile(file);
+                event.target.value = '';
+              }}
+            />
+          </label>
 
           <div className={styles.sidebarSection}>目录</div>
           {renderFolderTree(null, 0)}
