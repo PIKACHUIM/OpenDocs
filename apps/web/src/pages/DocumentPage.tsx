@@ -12,7 +12,7 @@ import styles from '../ui/common.module.scss';
  */
 const MindmapEditor = lazy(() => import('../editors/mindmap/MindmapEditor').then((m) => ({ default: m.MindmapEditor })));
 const MarkdownEditor = lazy(() => import('../editors/markdown/MarkdownEditor').then((m) => ({ default: m.MarkdownEditor })));
-const WordEditor = lazy(() => import('../editors/word/WordEditor').then((m) => ({ default: m.WordEditor })));
+const WordEditor = lazy(() => import('../editors/word/WordEditorEntry').then((m) => ({ default: m.WordEditor })));
 const ExcelEditor = lazy(() => import('../editors/excel/ExcelEditor').then((m) => ({ default: m.ExcelEditor })));
 const PptEditor = lazy(() => import('../editors/ppt/PptEditor').then((m) => ({ default: m.PptEditor })));
 

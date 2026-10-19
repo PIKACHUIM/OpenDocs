@@ -34,9 +34,13 @@ export interface MarkdownContent {
 export interface WordContent {
   type: 'word';
   version: number;
-  /** Tiptap ProseMirror JSON 文档 */
+  /** Tiptap ProseMirror JSON 文档（历史格式；新文档仅作占位以满足后端校验） */
   doc: Record<string, unknown>;
   mindmaps?: Record<string, EmbeddedMindmap>;
+  /** 编辑器引擎标记：新文档为 univer，历史文档没有该字段（走 Tiptap） */
+  engine?: 'univer';
+  /** Univer 文档快照（IDocumentData） */
+  univer?: unknown;
 }
 
 export interface ExcelSheet {
@@ -137,6 +141,7 @@ export function emptyContentFor(type: DocumentType): DocumentContent {
         version: 1,
         doc: { type: 'doc', content: [{ type: 'paragraph' }] },
         mindmaps: {},
+        engine: 'univer',
       };
     case 'excel':
       return {

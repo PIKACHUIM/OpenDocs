@@ -25,7 +25,7 @@ const MarkdownEditor = lazy(() =>
   import('../editors/markdown/MarkdownEditor').then((m) => ({ default: m.MarkdownEditor }))
 );
 const WordEditor = lazy(() =>
-  import('../editors/word/WordEditor').then((m) => ({ default: m.WordEditor }))
+  import('../editors/word/WordEditorEntry').then((m) => ({ default: m.WordEditor }))
 );
 const ExcelEditor = lazy(() =>
   import('../editors/excel/ExcelEditor').then((m) => ({ default: m.ExcelEditor }))

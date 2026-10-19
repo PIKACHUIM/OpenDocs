@@ -61,8 +61,6 @@ export default defineConfig({
       },
     ],
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/PIKACHUIM/drawnix' }],
-
     outline: { level: [2, 3], label: '本页目录' },
 
     docFooter: { prev: '上一篇', next: '下一篇' },
@@ -72,11 +70,6 @@ export default defineConfig({
     footer: {
       message: '基于 MIT 协议开源',
       copyright: 'OpenDocs',
-    },
-
-    editLink: {
-      pattern: 'https://github.com/PIKACHUIM/drawnix/edit/develop/docs/:path',
-      text: '在 GitHub 上编辑此页',
     },
   },
 });

@@ -184,6 +184,13 @@ async function blockToParagraphs(node: PMNode): Promise<Array<Paragraph | Table>
 }
 
 export async function exportWordToDocx(content: WordContent, title: string) {
+  // 新文档由 Univer 编辑，导出走 Univer 快照；历史文档继续用 ProseMirror 转换
+  if (content.univer) {
+    const { exportUniverDocToDocx } = await import('./univerDocExport');
+    await exportUniverDocToDocx(content, title);
+    return;
+  }
+
   const root = content.doc as unknown as PMNode;
   const children: Array<Paragraph | Table> = [];
   for (const block of root.content ?? []) {
