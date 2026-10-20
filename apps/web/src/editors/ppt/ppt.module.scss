@@ -164,6 +164,14 @@ $bg: #f2f3f5;
   outline: 1px solid $primary;
 }
 
+// 框选矩形
+.marquee {
+  position: absolute;
+  border: 1px solid $primary;
+  background: rgba(51, 112, 255, 0.08);
+  pointer-events: none;
+}
+
 // 拖拽吸附参考线
 .guideV {
   position: absolute;

@@ -94,7 +94,17 @@ function migrateSlide(slide: PptSlide): SlideElement[] {
 
 export function PptEditor({ content, canWrite, documentId, onChange }: PptEditorProps) {
   const [active, setActive] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 多选：selectedIds 是真实状态，selectedId 只是「主选中项」的派生值，
+  // 这样属性面板等既有代码不用改。
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedId = selectedIds[0] ?? null;
+  const setSelectedId = (id: string | null) => setSelectedIds(id ? [id] : []);
+  const [marquee, setMarquee] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
   const [scale, setScale] = useState(0.5);
   const [presenting, setPresenting] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
@@ -108,6 +118,8 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
     startX: number;
     startY: number;
     origin: SlideElement;
+    /** 成组移动时记录所有被拖元素的初始位置 */
+    origins: Array<{ id: string; x: number; y: number }>;
   } | null>(null);
 
   const slides = content.slides;
@@ -249,7 +261,43 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const removeElement = (id: string) => {
     patchSlide(active, { elements: elements.filter((item) => item.id !== id) });
-    if (selectedId === id) setSelectedId(null);
+    setSelectedIds((previous) => previous.filter((item) => item !== id));
+  };
+
+  /** 删除所有选中元素 */
+  const removeSelected = () => {
+    if (selectedIds.length === 0) return;
+    patchSlide(active, { elements: elements.filter((item) => !selectedIds.includes(item.id)) });
+    setSelectedIds([]);
+  };
+
+  /** 对齐所有选中元素 */
+  const alignSelected = (
+    axis: 'left' | 'centerX' | 'right' | 'top' | 'middle' | 'bottom'
+  ) => {
+    if (selectedIds.length === 0) return;
+    pushHistory();
+    onChange({
+      ...content,
+      slides: slides.map((item, index) => {
+        if (index !== active) return item;
+        return {
+          ...item,
+          elements: (item.elements ?? []).map((element) => {
+            if (!selectedIds.includes(element.id)) return element;
+            const offsets = {
+              left: { x: 0 },
+              centerX: { x: Math.round((SLIDE_WIDTH - element.w) / 2) },
+              right: { x: SLIDE_WIDTH - element.w },
+              top: { y: 0 },
+              middle: { y: Math.round((SLIDE_HEIGHT - element.h) / 2) },
+              bottom: { y: SLIDE_HEIGHT - element.h },
+            } as const;
+            return { ...element, ...offsets[axis] };
+          }),
+        };
+      }),
+    });
   };
 
   const duplicateElement = (id: string) => {
@@ -343,14 +391,30 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   const onPointerDown = (event: React.PointerEvent, element: SlideElement, mode: 'move' | 'resize') => {
     if (!canWrite) return;
     event.stopPropagation();
-    setSelectedId(element.id);
+
+    // Shift 点击 = 加入/移出选区；未按 Shift 且点在选区外 = 单选
+    let nextSelection = selectedIds;
+    if (mode === 'move' && event.shiftKey) {
+      nextSelection = selectedIds.includes(element.id)
+        ? selectedIds.filter((id) => id !== element.id)
+        : [...selectedIds, element.id];
+      setSelectedIds(nextSelection);
+    } else if (!selectedIds.includes(element.id)) {
+      nextSelection = [element.id];
+      setSelectedIds(nextSelection);
+    }
+
     pushHistory();
+    const groupIds = nextSelection.includes(element.id) ? nextSelection : [element.id];
     dragRef.current = {
       id: element.id,
       mode,
       startX: event.clientX,
       startY: event.clientY,
       origin: { ...element },
+      origins: elements
+        .filter((item) => groupIds.includes(item.id))
+        .map((item) => ({ id: item.id, x: item.x, y: item.y })),
     };
     (event.target as HTMLElement).setPointerCapture(event.pointerId);
   };
@@ -389,7 +453,25 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         }
       }
       setGuides({ v: guideV, h: guideH });
-      patchElement(drag.id, { x: nextX, y: nextY }, false);
+
+      const deltaX = nextX - drag.origin.x;
+      const deltaY = nextY - drag.origin.y;
+      if (drag.origins.length > 1) {
+        // 成组移动：一次性提交，避免每个元素各触发一次保存
+        const originMap = new Map(drag.origins.map((item) => [item.id, item]));
+        patchSlide(
+          active,
+          {
+            elements: elements.map((item) => {
+              const origin = originMap.get(item.id);
+              return origin ? { ...item, x: origin.x + deltaX, y: origin.y + deltaY } : item;
+            }),
+          },
+          false
+        );
+      } else {
+        patchElement(drag.id, { x: nextX, y: nextY }, false);
+      }
     } else {
       patchElement(
         drag.id,
@@ -573,8 +655,8 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           <button
             type="button"
             className={styles.topbarButton}
-            disabled={!canWrite || !selected}
-            onClick={() => selected && removeElement(selected.id)}
+            disabled={!canWrite || selectedIds.length === 0}
+            onClick={removeSelected}
           >
             删除
           </button>
@@ -586,16 +668,16 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           <button
             type="button"
             className={styles.topbarButton}
-            disabled={!canWrite || !selected}
-            onClick={() => selected && alignElement(selected.id, 'centerX')}
+            disabled={!canWrite || selectedIds.length === 0}
+            onClick={() => alignSelected('centerX')}
           >
             水平居中
           </button>
           <button
             type="button"
             className={styles.topbarButton}
-            disabled={!canWrite || !selected}
-            onClick={() => selected && alignElement(selected.id, 'middle')}
+            disabled={!canWrite || selectedIds.length === 0}
+            onClick={() => alignSelected('middle')}
           >
             垂直居中
           </button>
@@ -661,7 +743,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         ) : null}
       </div>
 
-      <div className={styles.stage} ref={stageRef} onClick={() => setSelectedId(null)}>
+      <div className={styles.stage} ref={stageRef}>
         <div
           className={styles.canvas}
           style={{
@@ -669,11 +751,52 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             height: SLIDE_HEIGHT * scale,
             background: slide.background ?? '#ffffff',
           }}
+          onPointerDown={(event) => {
+            if (!canWrite || event.target !== event.currentTarget) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / scale;
+            const y = (event.clientY - rect.top) / scale;
+            setSelectedIds([]);
+            setMarquee({ x0: x, y0: y, x1: x, y1: y });
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!marquee) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            setMarquee({
+              ...marquee,
+              x1: (event.clientX - rect.left) / scale,
+              y1: (event.clientY - rect.top) / scale,
+            });
+          }}
+          onPointerUp={() => {
+            if (!marquee) return;
+            const left = Math.min(marquee.x0, marquee.x1);
+            const right = Math.max(marquee.x0, marquee.x1);
+            const top = Math.min(marquee.y0, marquee.y1);
+            const bottom = Math.max(marquee.y0, marquee.y1);
+            if (right - left > 4 && bottom - top > 4) {
+              setSelectedIds(
+                elements
+                  .filter(
+                    (item) =>
+                      item.x < right &&
+                      item.x + item.w > left &&
+                      item.y < bottom &&
+                      item.y + item.h > top
+                  )
+                  .map((item) => item.id)
+              );
+            }
+            setMarquee(null);
+          }}
         >
           {elements.map((element) => (
             <div
               key={element.id}
-              className={`${styles.element} ${selectedId === element.id ? styles.elementActive : ''}`}
+              className={`${styles.element} ${
+                selectedIds.includes(element.id) ? styles.elementActive : ''
+              }`}
               style={{
                 left: element.x * scale,
                 top: element.y * scale,
@@ -689,7 +812,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               }}
             >
               {renderElement(element)}
-              {canWrite && selectedId === element.id ? (
+              {canWrite && selectedIds.length === 1 && selectedIds[0] === element.id ? (
                 <span
                   className={styles.handle}
                   onPointerDown={(event) => onPointerDown(event, element, 'resize')}
@@ -699,6 +822,18 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               ) : null}
             </div>
           ))}
+
+          {marquee ? (
+            <span
+              className={styles.marquee}
+              style={{
+                left: Math.min(marquee.x0, marquee.x1) * scale,
+                top: Math.min(marquee.y0, marquee.y1) * scale,
+                width: Math.abs(marquee.x1 - marquee.x0) * scale,
+                height: Math.abs(marquee.y1 - marquee.y0) * scale,
+              }}
+            />
+          ) : null}
 
           {guides.v !== null ? (
             <span className={styles.guideV} style={{ left: guides.v * scale }} />
