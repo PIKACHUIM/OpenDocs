@@ -12,6 +12,7 @@ import {
   type SlideLatexElement,
   type SlideShapeElement,
   type SlideShapeKind,
+  type SlideAnimationType,
   type SlideTextElement,
   type SlideTransitionType,
 } from '../../api';
@@ -111,6 +112,42 @@ function EditableText({
       }}
     />
   );
+}
+
+/**
+ * 元素进入动画的 keyframes。
+ * 用全局样式而不是 CSS Modules：动画名需要稳定，避免被哈希后无法在 inline style 里引用。
+ */
+const ANIMATION_CSS = `
+@keyframes opd-fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes opd-fly-left { from { opacity: 0; transform: translateX(-80px) } to { opacity: 1; transform: none } }
+@keyframes opd-fly-right { from { opacity: 0; transform: translateX(80px) } to { opacity: 1; transform: none } }
+@keyframes opd-fly-top { from { opacity: 0; transform: translateY(-80px) } to { opacity: 1; transform: none } }
+@keyframes opd-fly-bottom { from { opacity: 0; transform: translateY(80px) } to { opacity: 1; transform: none } }
+@keyframes opd-zoom-in { from { opacity: 0; transform: scale(0.6) } to { opacity: 1; transform: none } }
+@keyframes opd-wipe-in { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+`;
+
+const ANIMATION_NAME: Record<Exclude<SlideAnimationType, 'none'>, string> = {
+  fadeIn: 'opd-fade-in',
+  flyInLeft: 'opd-fly-left',
+  flyInRight: 'opd-fly-right',
+  flyInTop: 'opd-fly-top',
+  flyInBottom: 'opd-fly-bottom',
+  zoomIn: 'opd-zoom-in',
+  wipeIn: 'opd-wipe-in',
+};
+
+/** 把元素动画配置转成 inline style；未配置或 none 时返回空对象 */
+function animationStyle(animation?: {
+  type: SlideAnimationType;
+  duration: number;
+  delay: number;
+}): React.CSSProperties {
+  if (!animation || animation.type === 'none') return {};
+  const name = ANIMATION_NAME[animation.type];
+  if (!name) return {};
+  return { animation: `${name} ${animation.duration}ms ease ${animation.delay}ms both` };
 }
 
 /** 形状类型守卫：属性面板里需要对联合类型做收窄 */
@@ -350,9 +387,9 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       y: 280,
       w: 960,
       h: 100,
-      text: '双击右侧文本框编辑文字',
+      text: '双击直接编辑文字',
       fontSize: 40,
-      color: '#1b1f24',
+      color: theme.fontColor,
       bold: false,
       align: 'left',
     });
@@ -365,10 +402,10 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       y: type === 'line' ? 360 : 240,
       w: 440,
       h: type === 'line' ? 4 : 240,
-      fill: '#3370ff',
+      fill: primary,
       radius: type === 'roundRect' ? 24 : 16,
       lineWidth: type === 'line' ? 4 : 0,
-      lineColor: type === 'line' ? '#3370ff' : undefined,
+      lineColor: type === 'line' ? primary : undefined,
     } as SlideShapeElement);
 
   const addChart = (chartType: SlideChartType = 'column') =>
@@ -387,7 +424,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           { name: '系列 2', values: [21, 34, 52, 38] },
         ],
       },
-      themeColors: ['#3370ff', '#14c9c9', '#ff7d00', '#f53f3f', '#722ed1'],
+      themeColors: theme.themeColors,
       showLegend: true,
       showValue: false,
       title: '图表标题',
@@ -717,6 +754,18 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   };
 
   const selected = elements.find((item) => item.id === selectedId) ?? null;
+
+  /** 主题：未设置时给一套默认配色，新建元素据此取色 */
+  const theme = content.theme ?? {
+    themeColors: ['#3370ff', '#14c9c9', '#ff7d00', '#f53f3f', '#722ed1'],
+    fontColor: '#1b1f24',
+    fontName: 'PingFang SC',
+    backgroundColor: '#ffffff',
+  };
+  const primary = theme.themeColors[0] ?? '#3370ff';
+
+  const patchTheme = (patch: Partial<typeof theme>) =>
+    onChange({ ...content, theme: { ...theme, ...patch } });
 
   const renderElement = (element: SlideElement) => {
     if (element.type === 'text') {
@@ -1184,9 +1233,73 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               <input
                 className={styles.propInput}
                 type="color"
-                value={slide.background ?? '#ffffff'}
+                value={slide.background ?? theme.backgroundColor}
                 onChange={(event) => patchSlide(active, { background: event.target.value })}
               />
+            </div>
+
+            {/* 母版主题：新建文字/形状/图表都从这里取色，保证整册一致 */}
+            <div className={styles.propField}>
+              <span>主题色（新建元素取色）</span>
+              <div className={styles.propActions}>
+                {theme.themeColors.map((color, index) => (
+                  <input
+                    key={index}
+                    className={styles.propInput}
+                    type="color"
+                    value={color}
+                    disabled={!canWrite}
+                    style={{ width: 34, padding: 0 }}
+                    onChange={(event) => {
+                      const next = [...theme.themeColors];
+                      next[index] = event.target.value;
+                      patchTheme({ themeColors: next });
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.propField}>
+              <span>正文字色 / 默认底色</span>
+              <div className={styles.propRow}>
+                <input
+                  className={styles.propInput}
+                  type="color"
+                  value={theme.fontColor}
+                  disabled={!canWrite}
+                  onChange={(event) => patchTheme({ fontColor: event.target.value })}
+                />
+                <input
+                  className={styles.propInput}
+                  type="color"
+                  value={theme.backgroundColor}
+                  disabled={!canWrite}
+                  onChange={(event) => patchTheme({ backgroundColor: event.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className={styles.propField}>
+              <span>把主题应用到全部页面</span>
+              <button
+                type="button"
+                className={styles.propButton}
+                disabled={!canWrite}
+                onClick={() => {
+                  if (!window.confirm('将当前主题底色应用到所有页面？')) return;
+                  pushHistory();
+                  onChange({
+                    ...content,
+                    slides: slides.map((item) => ({
+                      ...item,
+                      background: item.background ?? theme.backgroundColor,
+                    })),
+                  });
+                }}
+              >
+                应用主题
+              </button>
             </div>
           </>
         ) : null}
@@ -1462,6 +1575,15 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                   >
                     {selected.showLegend ? '隐藏图例' : '显示图例'}
                   </button>
+                  <button
+                    type="button"
+                    className={styles.propButton}
+                    onClick={() =>
+                      patchElement(selected.id, { showValue: !selected.showValue } as never)
+                    }
+                  >
+                    {selected.showValue ? '隐藏数值' : '显示数值'}
+                  </button>
                 </div>
               </>
             ) : null}
@@ -1651,6 +1773,74 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               </>
             ) : null}
 
+            {/* 元素进入动画：放映时按顺序播放 */}
+            <div className={styles.propField}>
+              <span>进入动画</span>
+              <div className={styles.propRow}>
+                <select
+                  className={styles.propInput}
+                  value={selected.animation?.type ?? 'none'}
+                  disabled={!canWrite}
+                  onChange={(event) =>
+                    patchElement(selected.id, {
+                      animation: {
+                        type: event.target.value as SlideAnimationType,
+                        duration: selected.animation?.duration ?? 400,
+                        delay: selected.animation?.delay ?? 0,
+                      },
+                    } as never)
+                  }
+                >
+                  <option value="none">无</option>
+                  <option value="fadeIn">淡入</option>
+                  <option value="flyInLeft">从左飞入</option>
+                  <option value="flyInRight">从右飞入</option>
+                  <option value="flyInTop">从上飞入</option>
+                  <option value="flyInBottom">从下飞入</option>
+                  <option value="zoomIn">放大进入</option>
+                  <option value="wipeIn">擦除进入</option>
+                </select>
+                <input
+                  className={styles.propInput}
+                  type="number"
+                  min={100}
+                  max={5000}
+                  step={100}
+                  title="时长（毫秒）"
+                  value={selected.animation?.duration ?? 400}
+                  disabled={!canWrite}
+                  onChange={(event) =>
+                    patchElement(selected.id, {
+                      animation: {
+                        type: selected.animation?.type ?? 'none',
+                        duration: Number(event.target.value) || 400,
+                        delay: selected.animation?.delay ?? 0,
+                      },
+                    } as never)
+                  }
+                />
+                <input
+                  className={styles.propInput}
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={100}
+                  title="延迟（毫秒）"
+                  value={selected.animation?.delay ?? 0}
+                  disabled={!canWrite}
+                  onChange={(event) =>
+                    patchElement(selected.id, {
+                      animation: {
+                        type: selected.animation?.type ?? 'none',
+                        duration: selected.animation?.duration ?? 400,
+                        delay: Number(event.target.value) || 0,
+                      },
+                    } as never)
+                  }
+                />
+              </div>
+            </div>
+
             {canWrite ? (
               <div className={styles.propActions}>
                 <button
@@ -1788,7 +1978,10 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           tabIndex={-1}
           ref={(node) => node?.focus()}
         >
+          <style>{ANIMATION_CSS}</style>
           <div
+            // key 带页码：翻页时重新挂载，元素动画才会重播
+            key={`present-${presentIndex}`}
             className={styles.presentSlide}
             style={{ background: presentSlide.background ?? '#fff' }}
           >
@@ -1801,6 +1994,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                   top: `${(element.y / SLIDE_HEIGHT) * 100}%`,
                   width: `${(element.w / SLIDE_WIDTH) * 100}%`,
                   height: `${(element.h / SLIDE_HEIGHT) * 100}%`,
+                  ...animationStyle(element.animation),
                 }}
               >
                 {renderElement({ ...element, x: 0, y: 0, w: 0, h: 0 } as SlideElement)}

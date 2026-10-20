@@ -204,27 +204,53 @@ export function ChartView({ element, scale }: { element: SlideChartElement; scal
             const offset = band * 0.19 + seriesIndex * barSize;
             if (element.chartType === 'column') {
               const h = ratio * innerH;
+              const x = padding.left + index * band + offset;
+              const y = padding.top + innerH - h;
               return (
-                <rect
-                  key={`${seriesIndex}-${index}`}
-                  x={padding.left + index * band + offset}
-                  y={padding.top + innerH - h}
-                  width={barSize * 0.92}
-                  height={h}
-                  fill={colors[seriesIndex % colors.length]}
-                />
+                <g key={`${seriesIndex}-${index}`}>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={barSize * 0.92}
+                    height={h}
+                    fill={colors[seriesIndex % colors.length]}
+                  />
+                  {element.showValue ? (
+                    <text
+                      x={x + (barSize * 0.92) / 2}
+                      y={y - 4}
+                      fontSize={fontSize}
+                      fill="#4e5969"
+                      textAnchor="middle"
+                    >
+                      {value}
+                    </text>
+                  ) : null}
+                </g>
               );
             }
             const w = ratio * innerW;
+            const y = padding.top + index * band + offset;
             return (
-              <rect
-                key={`${seriesIndex}-${index}`}
-                x={padding.left}
-                y={padding.top + index * band + offset}
-                width={w}
-                height={barSize * 0.92}
-                fill={colors[seriesIndex % colors.length]}
-              />
+              <g key={`${seriesIndex}-${index}`}>
+                <rect
+                  x={padding.left}
+                  y={y}
+                  width={w}
+                  height={barSize * 0.92}
+                  fill={colors[seriesIndex % colors.length]}
+                />
+                {element.showValue ? (
+                  <text
+                    x={padding.left + w + 6}
+                    y={y + (barSize * 0.92) / 2 + fontSize / 3}
+                    fontSize={fontSize}
+                    fill="#4e5969"
+                  >
+                    {value}
+                  </text>
+                ) : null}
+              </g>
             );
           })
         )}
@@ -300,13 +326,14 @@ export function ChartView({ element, scale }: { element: SlideChartElement; scal
               ) : null}
               <path d={d} fill="none" stroke={colors[seriesIndex % colors.length]} strokeWidth={2} />
               {points.map(([x, y], index) => (
-                <circle
-                  key={index}
-                  cx={x}
-                  cy={y}
-                  r={3}
-                  fill={colors[seriesIndex % colors.length]}
-                />
+                <g key={index}>
+                  <circle cx={x} cy={y} r={3} fill={colors[seriesIndex % colors.length]} />
+                  {element.showValue ? (
+                    <text x={x} y={y - 8} fontSize={fontSize} fill="#4e5969" textAnchor="middle">
+                      {item.values[index]}
+                    </text>
+                  ) : null}
+                </g>
               ))}
             </g>
           );

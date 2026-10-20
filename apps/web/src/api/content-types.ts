@@ -68,12 +68,33 @@ export interface ExcelContent {
 /** 旧版版式（仅用于迁移历史文档） */
 export type SlideLayout = 'title' | 'title-body' | 'two-column' | 'blank';
 
+/** 元素级动画类型（对应 OpenPPT 的进入动画） */
+export type SlideAnimationType =
+  | 'none'
+  | 'fadeIn'
+  | 'flyInLeft'
+  | 'flyInRight'
+  | 'flyInTop'
+  | 'flyInBottom'
+  | 'zoomIn'
+  | 'wipeIn';
+
+export interface SlideAnimation {
+  type: SlideAnimationType;
+  /** 毫秒 */
+  duration: number;
+  /** 延迟，毫秒 */
+  delay: number;
+}
+
 interface SlideElementBase {
   id: string;
   x: number;
   y: number;
   w: number;
   h: number;
+  /** 进入动画：放映时生效 */
+  animation?: SlideAnimation;
 }
 
 export interface SlideTextElement extends SlideElementBase {
