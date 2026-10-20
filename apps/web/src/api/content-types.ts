@@ -145,11 +145,13 @@ export const SLIDE_HEIGHT = 720;
 export interface ImageContent {
   type: 'image';
   version: number;
-  width: number;
-  height: number;
-  background: string;
-  /** 图层结构由图片编辑器自身维护 */
-  layers: unknown[];
+  /** v2（poster-design 移植版）：多页，每页 { global, layers } */
+  layouts?: unknown[];
+  /** v1（自研简易版）的单页字段，仅用于读取旧文档时迁移 */
+  width?: number;
+  height?: number;
+  background?: string;
+  layers?: unknown[];
 }
 
 export type DocumentContent =
@@ -188,11 +190,28 @@ export function emptyContentFor(type: DocumentType): DocumentContent {
     case 'image':
       return {
         type,
-        version: 1,
-        width: 1080,
-        height: 1440,
-        background: '#f5f6f8',
-        layers: [],
+        version: 2,
+        layouts: [
+          {
+            global: {
+              name: '新画板',
+              type: 'page',
+              uuid: '-1',
+              left: 0,
+              top: 0,
+              width: 1920,
+              height: 1080,
+              backgroundColor: '#ffffffff',
+              backgroundGradient: '',
+              backgroundImage: '',
+              backgroundTransform: {},
+              opacity: 1,
+              tag: 0,
+              record: {},
+            },
+            layers: [],
+          },
+        ],
       };
     case 'ppt':
       return {

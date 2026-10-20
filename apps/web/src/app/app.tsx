@@ -5,7 +5,7 @@ import { AdminPage } from '../pages/AdminPage';
 import { DocumentPage } from '../pages/DocumentPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
-import { ImageEditorPage } from '../pages/ImageEditorPage';
+import { PosterEditor } from '../editors/poster/PosterEditor';
 import { LandingPage } from '../pages/LandingPage';
 import { LocalBoard } from '../pages/LocalBoard';
 import { LocalDraftPage } from '../pages/LocalDraftPage';
@@ -54,7 +54,7 @@ function Router() {
     case 'home':
       return <LandingPage />;
     case 'image':
-      return <ImageEditorPage />;
+      return <PosterEditor />;
     case 'try':
       return <LocalDraftPage key={`try:${route.type}`} type={route.type} />;
     case 'local':

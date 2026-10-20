@@ -21,7 +21,7 @@ const REQUIRED_FIELD: Record<DocumentType, string> = {
   word: 'doc',
   excel: 'sheets',
   ppt: 'slides',
-  image: 'layers',
+  image: 'layouts',
 };
 
 export function normalizeDocumentContent(
@@ -64,8 +64,16 @@ export function summarizeContent(content: DocumentContentEnvelope): number {
       return Array.isArray(content.sheets) ? content.sheets.length : 0;
     case 'ppt':
       return Array.isArray(content.slides) ? content.slides.length : 0;
-    case 'image':
+    case 'image': {
+      // v2：多页 layouts，统计所有页的图层总数；v1：单页 layers
+      if (Array.isArray(content.layouts)) {
+        return (content.layouts as Array<{ layers?: unknown[] }>).reduce(
+          (sum, page) => sum + (Array.isArray(page.layers) ? page.layers.length : 0),
+          0
+        );
+      }
       return Array.isArray(content.layers) ? content.layers.length : 0;
+    }
     case 'word':
       return 0;
     default:
@@ -84,11 +92,28 @@ export function emptyContentFor(type: DocumentType): DocumentContentEnvelope {
     case 'image':
       return {
         type,
-        version: 1,
-        width: 1080,
-        height: 1440,
-        background: '#f5f6f8',
-        layers: [],
+        version: 2,
+        layouts: [
+          {
+            global: {
+              name: '新画板',
+              type: 'page',
+              uuid: '-1',
+              left: 0,
+              top: 0,
+              width: 1920,
+              height: 1080,
+              backgroundColor: '#ffffffff',
+              backgroundGradient: '',
+              backgroundImage: '',
+              backgroundTransform: {},
+              opacity: 1,
+              tag: 0,
+              record: {},
+            },
+            layers: [],
+          },
+        ],
       };
     case 'excel':
       return {

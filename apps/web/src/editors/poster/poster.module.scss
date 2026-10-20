@@ -1,0 +1,813 @@
+// 图片/海报编辑器样式。
+// 布局结构移植自 poster-design（AGPL-3.0-or-later）：顶部栏 / 左侧分类 + 内容区 / 画布 / 右侧设置·图层。
+// 配色、圆角沿用 OpenDocs 设计 token，保证各编辑器视觉一致。
+
+$border: #e5e6eb;
+$text: #1b1f24;
+$muted: #86909c;
+$primary: #3370ff;
+$surface: #ffffff;
+$bg: #f2f3f5;
+$hover: #f5f6f7;
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: $bg;
+  color: $text;
+  font-size: 13px;
+}
+
+// ------------------------------------------------------------------ 顶部栏
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 14px;
+  background: $surface;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+}
+
+.titleInput {
+  width: 200px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: $text;
+
+  &:hover:not(:disabled) {
+    border-color: $border;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    background: $surface;
+  }
+}
+
+.status {
+  font-size: 12px;
+  color: $muted;
+}
+
+.grow {
+  flex: 1;
+}
+
+.topButton {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  background: $surface;
+  font-size: 13px;
+  color: $text;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: $hover;
+  }
+
+  &:disabled {
+    color: #c9cdd4;
+    cursor: not-allowed;
+  }
+}
+
+.topButtonPrimary {
+  border-color: $primary;
+  background: $primary;
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: #2a5fe0;
+  }
+}
+
+.topIcon {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: $border;
+}
+
+// ------------------------------------------------------------------ 主体
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+// 左侧
+.widgetPanel {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  background: $surface;
+  border-right: 1px solid $border;
+}
+
+.classify {
+  width: 66px;
+  margin: 0;
+  padding: 3px 0 0;
+  list-style: none;
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
+  user-select: none;
+}
+
+.classifyItem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 68px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+
+  p {
+    margin: 2px 0 0;
+  }
+
+  &:hover::after,
+  &.classifyItemActive::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 17px;
+    width: 4px;
+    height: 37px;
+    background: $primary;
+  }
+}
+
+.classifyItemActive {
+  color: $primary;
+
+  .classifyIcon {
+    color: $primary;
+    border-color: $primary;
+  }
+}
+
+.classifyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid #070707;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #070707;
+}
+
+.widgetWrap {
+  position: relative;
+  width: 300px;
+  overflow-y: auto;
+}
+
+.collapse {
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid $border;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: $surface;
+  color: $muted;
+  cursor: pointer;
+}
+
+.panelBody {
+  padding: 14px 14px 24px;
+}
+
+.panelTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panelHint {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: $muted;
+}
+
+.panelError {
+  margin: 8px 0;
+  font-size: 12px;
+  color: #f53f3f;
+}
+
+.textPresets {
+  display: grid;
+  gap: 8px;
+}
+
+.textPreset {
+  padding: 14px 12px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $hover;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary;
+    background: #eef3ff;
+  }
+}
+
+.shapeGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.shapeItem {
+  aspect-ratio: 1 / 1;
+  padding: 8px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $surface;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary;
+    background: #eef3ff;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.uploadRow {
+  margin-bottom: 8px;
+}
+
+.uploadButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  background: $surface;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background: $hover;
+  }
+}
+
+.urlRow input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.photoItem {
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 1px solid $border;
+  border-radius: 8px;
+  overflow: hidden;
+  background: $hover;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.toolItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $surface;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary;
+    background: #eef3ff;
+  }
+
+  strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  small {
+    color: $muted;
+    font-size: 12px;
+  }
+}
+
+.toolIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: $primary;
+  font-weight: 700;
+}
+
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.templateItem {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 12px;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.templateCover {
+  width: 100%;
+  margin-bottom: 6px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+// ------------------------------------------------------------------ 画布
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: $bg;
+}
+
+:global(.poster-stage) {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+:global(.poster-board) {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  box-shadow: 0 6px 28px rgba(27, 31, 36, 0.14);
+  overflow: hidden;
+  background-repeat: no-repeat;
+}
+
+:global(.poster-board .w-text .edit-text) {
+  min-height: 1em;
+  word-break: break-all;
+}
+
+:global(.poster-board .layer-lock) {
+  pointer-events: none;
+}
+
+.zoomBar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: $surface;
+  box-shadow: 0 2px 10px rgba(27, 31, 36, 0.08);
+  z-index: 5;
+}
+
+.zoomButton {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+
+  &:hover {
+    background: $hover;
+  }
+}
+
+.zoomValue {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+// ------------------------------------------------------------------ 右侧
+
+.stylePanel {
+  display: flex;
+  flex-direction: column;
+  width: 268px;
+  flex-shrink: 0;
+  height: 100%;
+  background: $surface;
+  border-left: 1px solid $border;
+}
+
+.styleTabs {
+  display: flex;
+  border-bottom: 1px solid $border;
+}
+
+.styleTab {
+  flex: 1;
+  height: 42px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: $muted;
+  cursor: pointer;
+}
+
+.styleTabActive {
+  border-bottom-color: $primary;
+  color: $text;
+}
+
+.styleBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.section {
+  border-bottom: 1px solid $border;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid $muted;
+  border-bottom: 1.5px solid $muted;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(45deg);
+}
+
+.sectionBody,
+.block {
+  display: grid;
+  gap: 10px;
+  padding: 4px 14px 14px;
+}
+
+.block {
+  padding-top: 12px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.numberField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  background: $surface;
+
+  span {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: $muted;
+  }
+
+  input {
+    width: 100%;
+    min-width: 0;
+    padding: 6px 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 12px;
+    text-align: right;
+  }
+
+  &:focus-within {
+    border-color: $primary;
+  }
+}
+
+.sliderField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+
+  input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.sliderLabel {
+  width: 44px;
+  flex-shrink: 0;
+  color: #4e5969;
+}
+
+.sliderValue {
+  width: 36px;
+  text-align: right;
+  color: $muted;
+  font-variant-numeric: tabular-nums;
+}
+
+.colorField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #4e5969;
+
+  input[type='color'] {
+    width: 34px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #d5d8de;
+    border-radius: 5px;
+    background: none;
+  }
+
+  code {
+    color: $muted;
+    font-size: 11px;
+  }
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #4e5969;
+
+  select,
+  input {
+    padding: 6px 8px;
+    border: 1px solid #d5d8de;
+    border-radius: 6px;
+    background: $surface;
+    font-size: 12px;
+  }
+}
+
+.textareaField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #4e5969;
+
+  textarea {
+    resize: vertical;
+    padding: 8px;
+    border: 1px solid #d5d8de;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+}
+
+.iconRow {
+  display: flex;
+  gap: 4px;
+}
+
+.iconButton {
+  flex: 1;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  background: $surface;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background: $hover;
+  }
+}
+
+.iconButtonActive {
+  border-color: $primary;
+  background: #eef3ff;
+  color: $primary;
+}
+
+.wideButton {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #d5d8de;
+  border-radius: 6px;
+  background: $surface;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background: $hover;
+  }
+}
+
+.primaryWide {
+  @extend .wideButton;
+  border-color: $primary;
+  background: #eef3ff;
+  color: $primary;
+}
+
+.tabs2 {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #f2f3f5;
+}
+
+.tab2 {
+  flex: 1;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: $muted;
+  cursor: pointer;
+}
+
+.tab2Active {
+  background: $surface;
+  color: $text;
+  box-shadow: 0 1px 2px rgba(27, 31, 36, 0.08);
+}
+
+.bgPreview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border: 1px solid $border;
+  border-radius: 8px;
+}
+
+// 图层列表
+.layerList {
+  padding: 8px 0;
+}
+
+.layerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 36px;
+  padding-right: 10px;
+  cursor: pointer;
+
+  &:hover {
+    background: $hover;
+  }
+}
+
+.layerItemActive {
+  background: #eef3ff;
+  color: $primary;
+}
+
+.layerName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layerLock {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}
+
+.layerLockOn {
+  color: $primary;
+  font-weight: 600;
+}
+
+.empty {
+  padding: 24px 16px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: $muted;
+  text-align: center;
+}
