@@ -34,6 +34,23 @@ export function createApp() {
   // 不回显用户可控的 path，避免反射内容/日志注入
   app.notFound(() => json({ error: '接口不存在', code: 'NOT_FOUND' }, 404));
 
+  // 响应后处理（注册在 cors 之前，这样它包住 cors，连 OPTIONS 预检也能处理）：
+  // 1) CORS 未命中白名单时不下发 ACAC（否则等于告诉浏览器「任意来源都可带凭证」）
+  // 2) 补 Referrer-Policy，避免 API 路径经 Referer 外泄到第三方
+  app.use('/api/*', async (c, next) => {
+    await next();
+    try {
+      if (!c.res.headers.get('access-control-allow-origin')) {
+        c.res.headers.delete('access-control-allow-credentials');
+      }
+      if (!c.res.headers.get('referrer-policy')) {
+        c.res.headers.set('referrer-policy', 'no-referrer');
+      }
+    } catch {
+      // 某些运行时的 Response headers 不可变，忽略即可（不影响主流程）
+    }
+  });
+
   // 同域部署时不需要 CORS；跨域调试可用 CORS_ORIGIN 显式放行
   app.use(
     '/api/*',
@@ -53,23 +70,6 @@ export function createApp() {
       maxAge: 86400,
     })
   );
-
-  // 响应后处理：
-  // 1) CORS 未命中白名单时不下发 ACAC（否则等于告诉浏览器「任意来源都可带凭证」）
-  // 2) 补 Referrer-Policy，避免 API 路径经 Referer 外泄到第三方
-  app.use('/api/*', async (c, next) => {
-    await next();
-    try {
-      if (!c.res.headers.get('access-control-allow-origin')) {
-        c.res.headers.delete('access-control-allow-credentials');
-      }
-      if (!c.res.headers.get('referrer-policy')) {
-        c.res.headers.set('referrer-policy', 'no-referrer');
-      }
-    } catch {
-      // 某些运行时的 Response headers 不可变，忽略即可（不影响主流程）
-    }
-  });
 
   app.use('*', withRuntime);
 
