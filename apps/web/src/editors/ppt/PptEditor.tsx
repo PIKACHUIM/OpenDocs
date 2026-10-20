@@ -5,11 +5,26 @@ import {
   SLIDE_WIDTH,
   type PptContent,
   type PptSlide,
+  type SlideChartElement,
+  type SlideChartType,
   type SlideElement,
+  type SlideIframeElement,
+  type SlideLatexElement,
   type SlideShapeElement,
+  type SlideShapeKind,
   type SlideTextElement,
+  type SlideTransitionType,
 } from '../../api';
 import { AssetPicker } from '../../ui/AssetPicker';
+import {
+  AudioView,
+  ChartView,
+  IframeView,
+  LatexView,
+  ShapeView,
+  VideoView,
+  imageFilterOf,
+} from './PptElements';
 import styles from './ppt.module.scss';
 
 export interface PptEditorProps {
@@ -17,6 +32,102 @@ export interface PptEditorProps {
   canWrite: boolean;
   documentId: string | null;
   onChange: (content: PptContent) => void;
+}
+
+/**
+ * 画布内的可编辑文本。
+ * 进入编辑时必须主动 focus 并全选，否则双击只切换了 contentEditable 属性，
+ * 焦点仍在外层元素上，键入不会进入文本框。
+ */
+function EditableText({
+  element,
+  scale,
+  editing,
+  onCommit,
+}: {
+  element: SlideTextElement;
+  scale: number;
+  editing: boolean;
+  onCommit: (text: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!editing || !node) return;
+    node.innerText = element.text;
+    node.focus();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    // 只在进入编辑态时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+
+  const body = element.bullet
+    ? element.text
+        .split('\n')
+        .map((line) => (line.trim() ? `• ${line}` : line))
+        .join('\n')
+    : element.text;
+
+  const style: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    color: element.color,
+    fontSize: element.fontSize * scale,
+    fontWeight: element.bold ? 700 : 400,
+    textAlign: element.align,
+    lineHeight: element.lineHeight ?? 1.35,
+    padding: (element.padding ?? 0) * scale,
+    boxSizing: 'border-box',
+    whiteSpace: 'pre-wrap',
+    outline: editing ? '2px solid #3370ff' : 'none',
+    cursor: editing ? 'text' : 'default',
+    pointerEvents: editing ? 'auto' : 'none',
+  };
+
+  if (!editing) {
+    return (
+      <div style={style} suppressContentEditableWarning>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      contentEditable="plaintext-only"
+      suppressContentEditableWarning
+      spellCheck={false}
+      onBlur={(event) => onCommit(event.currentTarget.innerText)}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === 'Escape') event.currentTarget.blur();
+      }}
+    />
+  );
+}
+
+/** 形状类型守卫：属性面板里需要对联合类型做收窄 */
+const SHAPE_KINDS = [
+  'rect',
+  'roundRect',
+  'ellipse',
+  'triangle',
+  'diamond',
+  'pentagon',
+  'chevron',
+  'star',
+  'line',
+] as const;
+
+function isShapeElement(element: SlideElement): element is SlideShapeElement {
+  return (SHAPE_KINDS as readonly string[]).includes(element.type);
 }
 
 /**
@@ -110,6 +221,8 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   const [presentIndex, setPresentIndex] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
+  /** 正在画布内直接编辑的文本元素 */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -147,8 +260,16 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       setScale(Math.max(0.15, Math.min(width / SLIDE_WIDTH, height / SLIDE_HEIGHT)));
     };
     calc();
+    // 只监听 window resize 不够：右侧属性面板、左侧幻灯片栏的宽度变化
+    // 都会改变可用区域，用 ResizeObserver 才能在布局稳定后重算，避免画布被裁掉
+    const host = stageRef.current;
+    const observer = host ? new ResizeObserver(calc) : null;
+    if (host && observer) observer.observe(host);
     window.addEventListener('resize', calc);
-    return () => window.removeEventListener('resize', calc);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', calc);
+    };
   }, []);
 
   useEffect(() => {
@@ -236,7 +357,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       align: 'left',
     });
 
-  const addShape = (type: 'rect' | 'ellipse' | 'triangle' | 'line') =>
+  const addShape = (type: SlideShapeKind) =>
     addElement({
       id: createId('el'),
       type,
@@ -245,8 +366,82 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       w: 440,
       h: type === 'line' ? 4 : 240,
       fill: '#3370ff',
-      radius: 16,
+      radius: type === 'roundRect' ? 24 : 16,
+      lineWidth: type === 'line' ? 4 : 0,
+      lineColor: type === 'line' ? '#3370ff' : undefined,
     } as SlideShapeElement);
+
+  const addChart = (chartType: SlideChartType = 'column') =>
+    addElement({
+      id: createId('el'),
+      type: 'chart',
+      x: 200,
+      y: 160,
+      w: 760,
+      h: 420,
+      chartType,
+      data: {
+        labels: ['一月', '二月', '三月', '四月'],
+        series: [
+          { name: '系列 1', values: [32, 58, 41, 73] },
+          { name: '系列 2', values: [21, 34, 52, 38] },
+        ],
+      },
+      themeColors: ['#3370ff', '#14c9c9', '#ff7d00', '#f53f3f', '#722ed1'],
+      showLegend: true,
+      showValue: false,
+      title: '图表标题',
+    } as SlideChartElement);
+
+  const addLatex = () =>
+    addElement({
+      id: createId('el'),
+      type: 'latex',
+      x: 340,
+      y: 280,
+      w: 600,
+      h: 120,
+      latex: 'E = mc^2',
+      fontSize: 40,
+      color: '#1b1f24',
+    } as SlideLatexElement);
+
+  const addIframe = () =>
+    addElement({
+      id: createId('el'),
+      type: 'iframe',
+      x: 240,
+      y: 160,
+      w: 800,
+      h: 450,
+      src: 'https://example.com',
+    } as SlideIframeElement);
+
+  const addMedia = (kind: 'video' | 'audio', src: string) =>
+    addElement(
+      kind === 'video'
+        ? {
+            id: createId('el'),
+            type: 'video',
+            x: 240,
+            y: 120,
+            w: 800,
+            h: 450,
+            src,
+            autoplay: false,
+          }
+        : ({
+            id: createId('el'),
+            type: 'audio',
+            x: 240,
+            y: 300,
+            w: 800,
+            h: 80,
+            src,
+            name: '音频',
+            autoplay: false,
+          } as SlideElement)
+    );
 
   const addTable = () =>
     addElement({
@@ -409,6 +604,8 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const onPointerDown = (event: React.PointerEvent, element: SlideElement, mode: 'move' | 'resize') => {
     if (!canWrite) return;
+    // 正在编辑这段文字时，不启动拖拽：否则光标会被打断，输入内容会丢
+    if (editingId === element.id) return;
     event.stopPropagation();
 
     // Shift 点击 = 加入/移出选区；未按 Shift 且点在选区外 = 单选
@@ -523,30 +720,16 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const renderElement = (element: SlideElement) => {
     if (element.type === 'text') {
-      const body = element.bullet
-        ? element.text
-            .split('\n')
-            .map((line) => (line.trim() ? `• ${line}` : line))
-            .join('\n')
-        : element.text;
       return (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            color: element.color,
-            fontSize: element.fontSize * scale,
-            fontWeight: element.bold ? 700 : 400,
-            textAlign: element.align,
-            lineHeight: element.lineHeight ?? 1.35,
-            padding: (element.padding ?? 0) * scale,
-            boxSizing: 'border-box',
-            whiteSpace: 'pre-wrap',
-            pointerEvents: 'none',
+        <EditableText
+          element={element}
+          scale={scale}
+          editing={editingId === element.id && canWrite}
+          onCommit={(text) => {
+            setEditingId(null);
+            if (text !== element.text) patchElement(element.id, { text });
           }}
-        >
-          {body}
-        </div>
+        />
       );
     }
     if (element.type === 'image') {
@@ -554,7 +737,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         <img
           src={element.src}
           alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: element.objectFit ?? 'cover',
+            borderRadius: (element.radius ?? 0) * scale,
+            filter: imageFilterOf(element),
+            pointerEvents: 'none',
+          }}
         />
       );
     }
@@ -605,37 +795,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       );
     }
 
-    if (element.type === 'triangle') {
-      return (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            background: element.fill,
-            clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
-            pointerEvents: 'none',
-          }}
-        />
-      );
-    }
-    if (element.type === 'line') {
-      return (
-        <div
-          style={{ width: '100%', height: '100%', background: element.fill, pointerEvents: 'none' }}
-        />
-      );
-    }
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          background: element.fill,
-          borderRadius: element.type === 'rect' ? (element.radius ?? 0) * scale : '50%',
-          pointerEvents: 'none',
-        }}
-      />
-    );
+    if (element.type === 'chart') return <ChartView element={element} scale={scale} />;
+    if (element.type === 'latex') return <LatexView element={element} scale={scale} />;
+    if (element.type === 'video') return <VideoView element={element} />;
+    if (element.type === 'audio') return <AudioView element={element} scale={scale} />;
+    if (element.type === 'iframe') return <IframeView element={element} />;
+
+    // 其余都是形状（含线条）
+    return <ShapeView element={element} scale={scale} />;
   };
 
   if (!slide) return <div className={styles.hint}>没有幻灯片</div>;
@@ -685,9 +852,79 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             type="button"
             className={styles.topbarButton}
             disabled={!canWrite}
+            onClick={() => addShape('roundRect')}
+          >
+            圆角矩形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('diamond')}
+          >
+            菱形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addShape('star')}
+          >
+            星形
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
             onClick={addTable}
           >
             表格
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => addChart('column')}
+          >
+            图表
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={addLatex}
+          >
+            公式
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={addIframe}
+          >
+            网页
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => {
+              const src = window.prompt('视频地址（mp4 直链，或 YouTube / Bilibili 链接）');
+              if (src) addMedia('video', src.trim());
+            }}
+          >
+            视频
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={() => {
+              const src = window.prompt('音频地址（mp3 直链）');
+              if (src) addMedia('audio', src.trim());
+            }}
+          >
+            音频
           </button>
           <button
             type="button"
@@ -883,6 +1120,12 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               onClick={(event) => {
                 event.stopPropagation();
                 setSelectedId(element.id);
+              }}
+              onDoubleClick={(event) => {
+                // 双击文本进入画布内编辑，与其他演示软件一致
+                if (element.type !== 'text' || !canWrite) return;
+                event.stopPropagation();
+                setEditingId(element.id);
               }}
             >
               {renderElement(element)}
@@ -1139,17 +1382,273 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               </>
             ) : null}
 
-            {selected.type === 'rect' || selected.type === 'ellipse' || selected.type === 'triangle' || selected.type === 'line' ? (
+            {selected.type === 'chart' ? (
+              <>
+                <div className={styles.propField}>
+                  <span>图表类型</span>
+                  <select
+                    className={styles.propInput}
+                    value={selected.chartType}
+                    disabled={!canWrite}
+                    onChange={(event) =>
+                      patchElement(selected.id, {
+                        chartType: event.target.value as SlideChartType,
+                      } as never)
+                    }
+                  >
+                    {(
+                      [
+                        ['column', '柱状图'],
+                        ['bar', '条形图'],
+                        ['line', '折线图'],
+                        ['area', '面积图'],
+                        ['pie', '饼图'],
+                        ['ring', '环形图'],
+                        ['radar', '雷达图'],
+                        ['scatter', '散点图'],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.propField}>
+                  <span>标题</span>
+                  <input
+                    className={styles.propInput}
+                    value={selected.title ?? ''}
+                    disabled={!canWrite}
+                    onChange={(event) =>
+                      patchElement(selected.id, { title: event.target.value } as never)
+                    }
+                  />
+                </div>
+                <div className={styles.propField}>
+                  <span>数据（首行为类别，每行一个系列：名称, 值1, 值2…）</span>
+                  <textarea
+                    className={styles.propInput}
+                    style={{ minHeight: 96, resize: 'vertical' }}
+                    disabled={!canWrite}
+                    value={[
+                      ['类别', ...selected.data.labels].join(', '),
+                      ...selected.data.series.map((item) => [item.name, ...item.values].join(', ')),
+                    ].join('\n')}
+                    onChange={(event) => {
+                      const lines = event.target.value
+                        .split('\n')
+                        .map((line) => line.split(',').map((cell) => cell.trim()))
+                        .filter((line) => line.length > 0);
+                      if (lines.length === 0) return;
+                      const labels = lines[0].slice(1);
+                      const series = lines.slice(1).map((line) => ({
+                        name: line[0] || '系列',
+                        values: line.slice(1).map((cell) => Number(cell) || 0),
+                      }));
+                      patchElement(selected.id, {
+                        data: { labels, series: series.length ? series : [{ name: '系列 1', values: [] }] },
+                      } as never);
+                    }}
+                  />
+                </div>
+                <div className={styles.propActions}>
+                  <button
+                    type="button"
+                    className={styles.propButton}
+                    onClick={() =>
+                      patchElement(selected.id, { showLegend: !selected.showLegend } as never)
+                    }
+                  >
+                    {selected.showLegend ? '隐藏图例' : '显示图例'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {selected.type === 'latex' ? (
+              <>
+                <div className={styles.propField}>
+                  <span>公式内容（LaTeX）</span>
+                  <textarea
+                    className={styles.propInput}
+                    style={{ minHeight: 72, resize: 'vertical', fontFamily: 'monospace' }}
+                    value={selected.latex}
+                    disabled={!canWrite}
+                    onChange={(event) =>
+                      patchElement(selected.id, { latex: event.target.value } as never)
+                    }
+                  />
+                </div>
+                <div className={styles.propField}>
+                  <span>字号 / 颜色</span>
+                  <div className={styles.propRow}>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      min={10}
+                      value={selected.fontSize}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { fontSize: Number(event.target.value) || 32 } as never)
+                      }
+                    />
+                    <input
+                      className={styles.propInput}
+                      type="color"
+                      value={selected.color}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { color: event.target.value } as never)
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            {selected.type === 'video' || selected.type === 'audio' || selected.type === 'iframe' ? (
               <div className={styles.propField}>
-                <span>填充色</span>
+                <span>
+                  {selected.type === 'video' ? '视频地址' : selected.type === 'audio' ? '音频地址' : '网页地址'}
+                </span>
                 <input
                   className={styles.propInput}
-                  type="color"
-                  value={selected.fill}
+                  value={selected.src}
                   disabled={!canWrite}
-                  onChange={(event) => patchElement(selected.id, { fill: event.target.value } as never)}
+                  placeholder="https://…"
+                  onChange={(event) =>
+                    patchElement(selected.id, { src: event.target.value } as never)
+                  }
                 />
               </div>
+            ) : null}
+
+            {selected.type === 'image' ? (
+              <>
+                <div className={styles.propField}>
+                  <span>圆角 / 裁切</span>
+                  <div className={styles.propRow}>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      min={0}
+                      value={selected.radius ?? 0}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { radius: Number(event.target.value) || 0 } as never)
+                      }
+                    />
+                    <select
+                      className={styles.propInput}
+                      value={selected.objectFit ?? 'cover'}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { objectFit: event.target.value } as never)
+                      }
+                    >
+                      <option value="cover">裁切填充</option>
+                      <option value="contain">完整显示</option>
+                      <option value="fill">拉伸</option>
+                    </select>
+                  </div>
+                </div>
+                {(
+                  [
+                    ['brightness', '亮度'],
+                    ['contrast', '对比度'],
+                    ['saturate', '饱和度'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div className={styles.propField} key={key}>
+                    <span>{label}</span>
+                    <div className={styles.propRow}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={(selected[key] as number | undefined) ?? 100}
+                        disabled={!canWrite}
+                        style={{ flex: 1 }}
+                        onChange={(event) =>
+                          patchElement(selected.id, { [key]: Number(event.target.value) } as never)
+                        }
+                      />
+                      <span style={{ width: 40, textAlign: 'right', fontSize: 12 }}>
+                        {(selected[key] as number | undefined) ?? 100}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : null}
+
+            {isShapeElement(selected) ? (
+              <>
+                <div className={styles.propField}>
+                  <span>填充色</span>
+                  <input
+                    className={styles.propInput}
+                    type="color"
+                    value={selected.fill}
+                    disabled={!canWrite}
+                    onChange={(event) => patchElement(selected.id, { fill: event.target.value } as never)}
+                  />
+                </div>
+                {selected.type === 'line' ? (
+                  <div className={styles.propField}>
+                    <span>线宽 / 箭头</span>
+                    <div className={styles.propRow}>
+                      <input
+                        className={styles.propInput}
+                        type="number"
+                        min={1}
+                        max={40}
+                        value={selected.lineWidth ?? 4}
+                        disabled={!canWrite}
+                        onChange={(event) =>
+                          patchElement(selected.id, { lineWidth: Number(event.target.value) || 1 } as never)
+                        }
+                      />
+                      <button
+                        type="button"
+                        className={styles.propButton}
+                        onClick={() =>
+                          patchElement(selected.id, { arrow: !selected.arrow } as never)
+                        }
+                      >
+                        {selected.arrow ? '去掉箭头' : '加箭头'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.propField}>
+                    <span>描边色 / 线宽</span>
+                    <div className={styles.propRow}>
+                      <input
+                        className={styles.propInput}
+                        type="color"
+                        value={selected.lineColor ?? '#1b1f24'}
+                        disabled={!canWrite}
+                        onChange={(event) =>
+                          patchElement(selected.id, { lineColor: event.target.value } as never)
+                        }
+                      />
+                      <input
+                        className={styles.propInput}
+                        type="number"
+                        min={0}
+                        max={20}
+                        value={selected.lineWidth ?? 0}
+                        disabled={!canWrite}
+                        onChange={(event) =>
+                          patchElement(selected.id, { lineWidth: Number(event.target.value) || 0 } as never)
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             ) : null}
 
             {canWrite ? (
@@ -1188,6 +1687,61 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         ) : (
           <p className={styles.hint}>选中画布中的元素后可调整位置与样式。</p>
         )}
+
+        {/* 本页备注与切换动画：对应 OpenPPT 的备注区与「切换」面板 */}
+        <div className={styles.propField} style={{ marginTop: 12 }}>
+          <span>本页备注</span>
+          <textarea
+            className={styles.propInput}
+            style={{ minHeight: 64, resize: 'vertical' }}
+            placeholder="演讲者备注（放映时可见，不显示在画布上）"
+            value={slide.notes ?? ''}
+            disabled={!canWrite}
+            onChange={(event) => patchSlide(active, { notes: event.target.value })}
+          />
+        </div>
+
+        <div className={styles.propField}>
+          <span>切换动画</span>
+          <div className={styles.propRow}>
+            <select
+              className={styles.propInput}
+              value={slide.transition?.type ?? 'none'}
+              disabled={!canWrite}
+              onChange={(event) =>
+                patchSlide(active, {
+                  transition: {
+                    type: event.target.value as SlideTransitionType,
+                    duration: slide.transition?.duration ?? 300,
+                  },
+                })
+              }
+            >
+              <option value="none">无</option>
+              <option value="fade">淡入</option>
+              <option value="slide">滑动</option>
+              <option value="zoom">缩放</option>
+              <option value="wipe">擦除</option>
+            </select>
+            <input
+              className={styles.propInput}
+              type="number"
+              min={100}
+              max={3000}
+              step={100}
+              value={slide.transition?.duration ?? 300}
+              disabled={!canWrite}
+              onChange={(event) =>
+                patchSlide(active, {
+                  transition: {
+                    type: slide.transition?.type ?? 'none',
+                    duration: Number(event.target.value) || 300,
+                  },
+                })
+              }
+            />
+          </div>
+        </div>
 
         <div className={styles.propActions} style={{ marginTop: 14 }}>
           <button
@@ -1324,19 +1878,18 @@ function SlidePreview({ slide }: { slide: PptSlide }) {
             />
           ) : element.type === 'image' ? (
             <img src={element.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : element.type === 'chart' ? (
+            <ChartView element={element} scale={0.1} />
+          ) : element.type === 'latex' ? (
+            <LatexView element={element} scale={0.12} />
+          ) : element.type === 'video' ? (
+            <div style={{ width: '100%', height: '100%', background: '#1b1f24' }} />
+          ) : element.type === 'audio' ? (
+            <div style={{ width: '100%', height: '100%', background: '#f2f3f5' }} />
+          ) : element.type === 'iframe' ? (
+            <div style={{ width: '100%', height: '100%', background: '#e5e6eb' }} />
           ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                background: element.fill,
-                borderRadius: element.type === 'rect' || element.type === 'line' ? 2 : '50%',
-                clipPath:
-                  element.type === 'triangle'
-                    ? 'polygon(50% 0%, 100% 100%, 0% 100%)'
-                    : undefined,
-              }}
-            />
+            <ShapeView element={element} scale={0.1} />
           )}
         </div>
       ))}

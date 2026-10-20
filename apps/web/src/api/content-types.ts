@@ -91,15 +91,40 @@ export interface SlideTextElement extends SlideElementBase {
   padding?: number;
 }
 
+/** 形状种类，对应 OpenPPT 的形状池（去掉需要复杂路径的高阶形状） */
+export type SlideShapeKind =
+  | 'rect'
+  | 'roundRect'
+  | 'ellipse'
+  | 'triangle'
+  | 'diamond'
+  | 'pentagon'
+  | 'chevron'
+  | 'star'
+  | 'line';
+
 export interface SlideShapeElement extends SlideElementBase {
-  type: 'rect' | 'ellipse' | 'triangle' | 'line';
+  type: SlideShapeKind;
   fill: string;
   radius?: number;
+  /** 描边色；为空表示无描边 */
+  lineColor?: string;
+  lineWidth?: number;
+  opacity?: number;
+  /** 线条末端箭头（仅 line 生效） */
+  arrow?: boolean;
 }
 
 export interface SlideImageElement extends SlideElementBase {
   type: 'image';
   src: string;
+  /** 圆角与裁切方式 */
+  radius?: number;
+  objectFit?: 'cover' | 'contain' | 'fill';
+  /** 0–100，100 为原样 */
+  brightness?: number;
+  contrast?: number;
+  saturate?: number;
 }
 
 export interface SlideTableElement extends SlideElementBase {
@@ -112,15 +137,91 @@ export interface SlideTableElement extends SlideElementBase {
   borderColor: string;
 }
 
+export type SlideChartType =
+  | 'column'
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'ring'
+  | 'radar'
+  | 'scatter';
+
+export interface SlideChartElement extends SlideElementBase {
+  type: 'chart';
+  chartType: SlideChartType;
+  data: {
+    labels: string[];
+    series: Array<{ name: string; values: number[] }>;
+  };
+  themeColors: string[];
+  showLegend: boolean;
+  showValue: boolean;
+  /** 图表标题，空则不显示 */
+  title?: string;
+}
+
+export interface SlideLatexElement extends SlideElementBase {
+  type: 'latex';
+  latex: string;
+  fontSize: number;
+  color: string;
+}
+
+export interface SlideVideoElement extends SlideElementBase {
+  type: 'video';
+  src: string;
+  poster?: string;
+  autoplay: boolean;
+}
+
+export interface SlideAudioElement extends SlideElementBase {
+  type: 'audio';
+  src: string;
+  name: string;
+  autoplay: boolean;
+}
+
+export interface SlideIframeElement extends SlideElementBase {
+  type: 'iframe';
+  src: string;
+}
+
 export type SlideElement =
   | SlideTextElement
   | SlideShapeElement
   | SlideImageElement
-  | SlideTableElement;
+  | SlideTableElement
+  | SlideChartElement
+  | SlideLatexElement
+  | SlideVideoElement
+  | SlideAudioElement
+  | SlideIframeElement;
+
+/** 页面切换动画 */
+export type SlideTransitionType = 'none' | 'fade' | 'slide' | 'zoom' | 'wipe';
+
+export interface SlideTransition {
+  type: SlideTransitionType;
+  /** 毫秒 */
+  duration: number;
+}
+
+export interface PptContentTheme {
+  themeColors: string[];
+  fontColor: string;
+  fontName: string;
+  backgroundColor: string;
+}
 
 export interface PptSlide {
   id: string;
   background?: string;
+  backgroundImage?: string;
+  /** 演讲者备注 */
+  notes?: string;
+  /** 切换动画 */
+  transition?: SlideTransition;
   /** 自由画布元素；新文档使用 */
   elements?: SlideElement[];
 
@@ -136,6 +237,8 @@ export interface PptContent {
   type: 'ppt';
   version: number;
   slides: PptSlide[];
+  /** 主题：形状与图表取色、默认字体色 */
+  theme?: PptContentTheme;
 }
 
 /** 幻灯片设计尺寸（16:9），画布与导出共用同一坐标系 */

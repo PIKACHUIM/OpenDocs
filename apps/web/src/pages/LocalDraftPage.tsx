@@ -16,6 +16,7 @@ import { DocumentShell } from '../editors/DocumentShell';
 import { useAuth } from '../lib/auth';
 import { navigate, type TryType } from '../lib/router';
 import type { SyncStatus } from '../lib/document-session';
+import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import styles from '../ui/common.module.scss';
 
 const MindmapEditor = lazy(() =>
@@ -55,6 +56,7 @@ export function LocalDraftPage({ type }: { type: TryType }) {
   const [title, setTitle] = useState(TYPE_TITLE[type]);
   const [status, setStatus] = useState<SyncStatus>({ status: 'idle' });
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const storageKey = `draft:${type}`;
@@ -145,6 +147,77 @@ export function LocalDraftPage({ type }: { type: TryType }) {
     return <div className={styles.center}>加载中…</div>;
   }
 
+  /**
+   * 试用页也能导出：本地草稿本身就在浏览器里，
+   * 导出逻辑与云端文档完全一致，只是不需要了服务端。
+   */
+  const runExport = async (task: () => Promise<void> | void) => {
+    setExporting(true);
+    try {
+      await task();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '导出失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportItems: Array<{ label: string; onSelect: () => void }> =
+    type === 'mindmap'
+      ? [
+          {
+            label: '导出为 .drawnix',
+            onSelect: () =>
+              runExport(async () => {
+                const { exportMindmapJson } = await import('../export/mindmapExport');
+                exportMindmapJson(content as MindmapContent, title);
+              }),
+          },
+        ]
+      : type === 'markdown'
+        ? [
+            {
+              label: '导出 Markdown 源码',
+              onSelect: () =>
+                runExport(async () => {
+                  const { exportMarkdownSource } = await import('../export/markdownExport');
+                  exportMarkdownSource(content as MarkdownContent, title);
+                }),
+            },
+          ]
+        : type === 'word'
+          ? [
+              {
+                label: '导出为 Word (.docx)',
+                onSelect: () =>
+                  runExport(async () => {
+                    const { exportWordToDocx } = await import('../export/wordExport');
+                    await exportWordToDocx(content as WordContent, title);
+                  }),
+              },
+            ]
+          : type === 'excel'
+            ? [
+                {
+                  label: '导出为 Excel (.xlsx)',
+                  onSelect: () =>
+                    runExport(async () => {
+                      const { exportExcelToXlsx } = await import('../export/excelExport');
+                      await exportExcelToXlsx(content as ExcelContent, title);
+                    }),
+                },
+              ]
+            : [
+                {
+                  label: '导出为 PowerPoint (.pptx)',
+                  onSelect: () =>
+                    runExport(async () => {
+                      const { exportPptToPptx } = await import('../export/pptExport');
+                      await exportPptToPptx(content as PptContent, title);
+                    }),
+                },
+              ];
+
   const shared = { canWrite: true, documentId: null, shareToken: null };
 
   return (
@@ -157,6 +230,16 @@ export function LocalDraftPage({ type }: { type: TryType }) {
       toolbar={
         <div className={styles.row}>
           <span className={`${styles.tag} ${styles.tagMuted}`}>免登录 · 仅存本地</span>
+          <Dropdown
+            trigger={<span className={styles.button}>{exporting ? '导出中…' : '导出'}</span>}
+            align="left"
+          >
+            {exportItems.map((item) => (
+              <DropdownItem key={item.label} onClick={item.onSelect}>
+                {item.label}
+              </DropdownItem>
+            ))}
+          </Dropdown>
           <button
             type="button"
             className={`${styles.button} ${styles.buttonPrimary}`}

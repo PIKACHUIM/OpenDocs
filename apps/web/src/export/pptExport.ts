@@ -1,5 +1,11 @@
 import PptxGenJS from 'pptxgenjs';
-import { SLIDE_HEIGHT, SLIDE_WIDTH, type PptContent, type PptSlide } from '../api';
+import {
+  SLIDE_HEIGHT,
+  SLIDE_WIDTH,
+  type PptContent,
+  type PptSlide,
+  type SlideShapeElement,
+} from '../api';
 import { safeFileName } from './download';
 
 /** 设计稿尺寸（1280×720）→ PPT 英寸（10×5.625） */
@@ -39,6 +45,19 @@ async function toDataUrl(url: string): Promise<string | null> {
 async function buildSlide(pptx: PptxGenJS, data: PptSlide) {
   const slide = pptx.addSlide();
   slide.background = { color: hex(data.background, 'FFFFFF') };
+
+  // 形状映射用实例上的枚举构造（PptxGenJS 的 ShapeType 挂在实例上）
+  const shapeMap: Record<string, PptxGenJS.ShapeType> = {
+    rect: pptx.ShapeType.rect,
+    roundRect: pptx.ShapeType.roundRect,
+    ellipse: pptx.ShapeType.ellipse,
+    triangle: pptx.ShapeType.triangle,
+    diamond: pptx.ShapeType.diamond,
+    pentagon: pptx.ShapeType.pentagon,
+    chevron: pptx.ShapeType.chevron,
+    star: pptx.ShapeType.star5,
+    line: pptx.ShapeType.line,
+  };
 
   const elements = data.elements ?? [];
   if (elements.length === 0) {
@@ -110,31 +129,96 @@ async function buildSlide(pptx: PptxGenJS, data: PptSlide) {
       continue;
     }
 
-    if (
-      element.type === 'rect' ||
-      element.type === 'ellipse' ||
-      element.type === 'triangle' ||
-      element.type === 'line'
-    ) {
-      const shapeType =
-        element.type === 'rect'
-          ? pptx.ShapeType.rect
-          : element.type === 'ellipse'
-            ? pptx.ShapeType.ellipse
-            : element.type === 'triangle'
-              ? pptx.ShapeType.triangle
-              : pptx.ShapeType.line;
-      slide.addShape(shapeType, {
+    if (element.type === 'chart') {
+      // 图表用原生图表导出，保证在 PowerPoint 里仍可编辑数据
+      const chartTypeMap = {
+        column: pptx.ChartType.bar,
+        bar: pptx.ChartType.bar,
+        line: pptx.ChartType.line,
+        area: pptx.ChartType.area,
+        pie: pptx.ChartType.pie,
+        ring: pptx.ChartType.doughnut,
+        radar: pptx.ChartType.radar,
+        scatter: pptx.ChartType.scatter,
+      } as const;
+      slide.addChart(
+        chartTypeMap[element.chartType] ?? pptx.ChartType.bar,
+        element.data.series.map((item) => ({
+          name: item.name,
+          labels: element.data.labels,
+          values: item.values,
+        })),
+        {
+          ...box,
+          barDir: element.chartType === 'bar' ? 'bar' : 'col',
+          showLegend: element.showLegend,
+          showValue: element.showValue,
+          chartColors: element.themeColors.map((color) => hex(color, '3370FF')),
+          title: element.title || undefined,
+          showTitle: !!element.title,
+        }
+      );
+      continue;
+    }
+
+    if (element.type === 'latex') {
+      // pptx 无原生公式，导出为文本；坐标与字号保持一致
+      slide.addText(element.latex, {
         ...box,
-        fill: { color: hex(element.fill, '3370FF') },
-        line: { color: hex(element.fill, '3370FF') },
+        fontSize: Math.max(8, element.fontSize * PT),
+        color: hex(element.color, '1B1F24'),
+        align: 'center',
+        valign: 'middle',
+        italic: true,
+        fontFace: 'Cambria Math',
+      });
+      continue;
+    }
+
+    if (element.type === 'video' || element.type === 'audio' || element.type === 'iframe') {
+      // 媒体与网页在 pptx 里无法逐帧还原，导出为带链接的说明框，避免信息丢失
+      const label =
+        element.type === 'video'
+          ? `[视频] ${element.src}`
+          : element.type === 'audio'
+            ? `[音频] ${element.src}`
+            : `[网页] ${element.src}`;
+      slide.addText(label, {
+        ...box,
+        fontSize: 10,
+        color: '4E5969',
+        align: 'left',
+        valign: 'middle',
+        fill: { color: 'F2F3F5' },
+        hyperlink: { url: element.src },
+      });
+      continue;
+    }
+
+    if (shapeMap[element.type as string]) {
+      const shape = element as SlideShapeElement;
+      slide.addShape(shapeMap[shape.type as string], {
+        ...box,
+        fill: shape.type === 'line' ? { color: hex(shape.fill, '3370FF') } : { color: hex(shape.fill, '3370FF') },
+        line:
+          shape.type === 'line'
+            ? { color: hex(shape.fill, '3370FF'), width: (shape.lineWidth ?? 4) * 0.75 }
+            : shape.lineColor
+              ? { color: hex(shape.lineColor, '1B1F24'), width: (shape.lineWidth ?? 1) * 0.75 }
+              : { color: hex(shape.fill, '3370FF') },
       });
       continue;
     }
 
     if (element.type !== 'image') continue;
     const image = await toDataUrl(element.src);
-    if (image) slide.addImage({ data: image, ...box });
+    if (image) {
+      slide.addImage({
+        data: image,
+        ...box,
+        rounding: element.radius ? true : false,
+      });
+    }
   }
 }
 
