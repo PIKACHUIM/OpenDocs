@@ -118,18 +118,25 @@ export function createUserRepo(sql: SqlClient) {
   };
 
   /**
-   * 超级管理员：最早创建的管理员（数据库 rowid 最小）。
+   * 超级管理员：数据库中最早创建的用户（rowid 最小，等价于「ID=1 / 最小 ID」）。
    *
-   * 规则：
-   * - 只有超级管理员可以授予/取消管理员
-   * - 超级管理员不能被取消管理员、也不能被删除
-   * 用 rowid 而不是字符串 id，是因为用户 id 是随机前缀，无法比较大小。
+   * 用 rowid 而不是字符串 id，因为用户 id 是 `u_xxx` 随机前缀，无法比较大小。
+   *
+   * 兜底：如果这个用户因为历史原因不是管理员（例如首个用户是在
+   * BOOTSTRAP_FIRST_ADMIN 关闭时注册的），则退回到「最早创建的管理员」，
+   * 否则会出现「超级管理员进不了后台 → 谁也无法再设置管理员」的死锁。
    */
   const getSuperAdminId = async (): Promise<string | null> => {
-    const row = await sql.first<{ id: string }>(
+    const first = await sql.first<{ id: string; role: string }>(
+      'SELECT id, role FROM users ORDER BY rowid ASC LIMIT 1'
+    );
+    if (!first) return null;
+    if (first.role === 'admin') return first.id;
+
+    const firstAdmin = await sql.first<{ id: string }>(
       "SELECT id FROM users WHERE role = 'admin' ORDER BY rowid ASC LIMIT 1"
     );
-    return row?.id ?? null;
+    return firstAdmin?.id ?? null;
   };
 
   /** 兼容旧调用名 */
