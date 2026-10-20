@@ -49,6 +49,17 @@ export interface ApiFolder {
   updatedAt: string;
 }
 
+/** 管理端附件 */
+export interface AdminAsset {
+  id: string;
+  url: string;
+  contentType: string;
+  sizeBytes: number;
+  documentId: string | null;
+  ownerEmail: string | null;
+  createdAt: string;
+}
+
 /** 邀请码 */
 export interface AdminInviteCode {
   id: string;

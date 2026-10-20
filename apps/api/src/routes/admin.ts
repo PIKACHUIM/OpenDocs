@@ -281,6 +281,53 @@ adminRoutes.patch('/settings', async (c) => {
 // 邀请码管理
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 附件管理
+// ---------------------------------------------------------------------------
+
+adminRoutes.get('/assets', async (c) => {
+  const { page, pageSize, offset } = paging(c.req.query('page'), c.req.query('pageSize'));
+  const [rows, total, unreferenced] = await Promise.all([
+    c.get('repos').assets.listAll(pageSize, offset),
+    c.get('repos').assets.countAll(),
+    c.get('repos').assets.listUnreferenced(),
+  ]);
+
+  return json({
+    assets: rows.map((asset) => ({
+      id: asset.id,
+      url: `/api/assets/${asset.id}`,
+      contentType: asset.content_type,
+      sizeBytes: asset.size_bytes,
+      documentId: asset.document_id,
+      ownerEmail: asset.owner_email,
+      createdAt: asset.created_at,
+    })),
+    total,
+    unreferenced: unreferenced.length,
+    page,
+    pageSize,
+  });
+});
+
+adminRoutes.delete('/assets/:id', async (c) => {
+  const asset = await c.get('repos').assets.getById(c.req.param('id'));
+  if (!asset) return json({ ok: true });
+  await c.get('runtime').files.delete(asset.file_key);
+  await c.get('repos').assets.remove(asset.id);
+  return json({ ok: true });
+});
+
+/** 清理「绑定文档已被彻底删除」的附件 */
+adminRoutes.post('/assets/cleanup', async (c) => {
+  const rows = await c.get('repos').assets.listUnreferenced();
+  for (const asset of rows) {
+    await c.get('runtime').files.delete(asset.file_key);
+    await c.get('repos').assets.remove(asset.id);
+  }
+  return json({ ok: true, removed: rows.length });
+});
+
 adminRoutes.get('/invites', async (c) => {
   const invites = await c.get('repos').invites.list();
   return json({ invites: invites.map((item) => toPublicInviteCode(item)) });

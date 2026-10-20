@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
   adminApi,
+  type AdminAsset,
   type AdminInviteCode,
   type AdminSettings,
   type AdminStats,
@@ -14,7 +15,7 @@ import { useAuth } from '../lib/auth';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
-type Tab = 'overview' | 'users' | 'documents' | 'invites' | 'settings';
+type Tab = 'overview' | 'users' | 'documents' | 'assets' | 'invites' | 'settings';
 
 const PAGE_SIZE = 20;
 
@@ -59,6 +60,11 @@ export function AdminPage() {
   const [documentQuery, setDocumentQuery] = useState('');
 
   const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [assets, setAssets] = useState<AdminAsset[]>([]);
+  const [assetTotal, setAssetTotal] = useState(0);
+  const [assetPage, setAssetPage] = useState(1);
+  const [unreferenced, setUnreferenced] = useState(0);
+
   const [invites, setInvites] = useState<AdminInviteCode[]>([]);
   const [inviteForm, setInviteForm] = useState({
     code: '',
@@ -144,6 +150,18 @@ export function AdminPage() {
     }
   }, []);
 
+  const loadAssets = useCallback(async (page: number) => {
+    try {
+      const data = await adminApi.assets({ page, pageSize: PAGE_SIZE });
+      setAssets(data.assets);
+      setAssetTotal(data.total);
+      setUnreferenced(data.unreferenced);
+      setAssetPage(data.page);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '附件列表加载失败');
+    }
+  }, []);
+
   const loadInvites = useCallback(async () => {
     try {
       const data = await adminApi.invites();
@@ -159,10 +177,11 @@ export function AdminPage() {
     if (tab === 'overview') void loadStats();
     if (tab === 'users') void loadUsers(1, userQuery);
     if (tab === 'documents') void loadDocuments(1, documentQuery);
+    if (tab === 'assets') void loadAssets(1);
     if (tab === 'invites') void loadInvites();
     if (tab === 'settings') void loadSettings();
     // 只在切换 tab 时按当前已有的搜索词触发一次加载
-  }, [tab, isAdmin, loadStats, loadUsers, loadDocuments, loadInvites, loadSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, isAdmin, loadStats, loadUsers, loadDocuments, loadAssets, loadInvites, loadSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (action: () => Promise<void>, successMessage?: string) => {
     setBusy(true);
@@ -281,6 +300,7 @@ export function AdminPage() {
               ['overview', '概览'],
               ['users', '用户管理'],
               ['documents', '文档管理'],
+              ['assets', '附件管理'],
               ['invites', '邀请码'],
               ['settings', '系统设置'],
             ] as const
@@ -569,6 +589,123 @@ export function AdminPage() {
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {tab === 'assets' ? (
+          <div>
+            <div
+              className={styles.row}
+              style={{ justifyContent: 'space-between', marginBottom: 12 }}
+            >
+              <span className={styles.hint}>
+                共 {assetTotal} 个附件 · {unreferenced} 个无引用（所属文档已彻底删除）
+              </span>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.buttonDanger}`}
+                disabled={busy || unreferenced === 0}
+                onClick={() =>
+                  run(async () => {
+                    await adminApi.cleanupAssets();
+                    await loadAssets(assetPage);
+                  }, '已清理无引用附件')
+                }
+              >
+                清理无引用
+              </button>
+            </div>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>预览</th>
+                    <th>所属用户</th>
+                    <th>大小</th>
+                    <th>创建时间</th>
+                    <th style={{ textAlign: 'right' }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: '#86909c', padding: 32 }}>
+                        还没有附件
+                      </td>
+                    </tr>
+                  ) : (
+                    assets.map((asset) => (
+                      <tr key={asset.id}>
+                        <td>
+                          <img
+                            src={asset.url}
+                            alt=""
+                            style={{
+                              width: 44,
+                              height: 44,
+                              objectFit: 'cover',
+                              borderRadius: 6,
+                              border: '1px solid #e5e6eb',
+                            }}
+                          />
+                        </td>
+                        <td>{asset.ownerEmail ?? '—'}</td>
+                        <td>{(asset.sizeBytes / 1024).toFixed(0)} KB</td>
+                        <td>{formatTime(asset.createdAt)}</td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <button
+                            type="button"
+                            className={`${styles.button} ${styles.buttonSm}`}
+                            onClick={() => window.open(asset.url, '_blank', 'noopener')}
+                          >
+                            查看
+                          </button>{' '}
+                          <button
+                            type="button"
+                            className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
+                            disabled={busy}
+                            onClick={() => {
+                              if (!window.confirm('删除该附件？引用它的文档会显示裂图。')) return;
+                              void run(async () => {
+                                await adminApi.deleteAsset(asset.id);
+                                await loadAssets(assetPage);
+                              }, '附件已删除');
+                            }}
+                          >
+                            删除
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {Math.ceil(assetTotal / PAGE_SIZE) > 1 ? (
+              <div className={styles.pagination}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.buttonSm}`}
+                  disabled={assetPage <= 1}
+                  onClick={() => void loadAssets(Math.max(1, assetPage - 1))}
+                >
+                  上一页
+                </button>
+                <span>
+                  {assetPage} / {Math.ceil(assetTotal / PAGE_SIZE)}
+                </span>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.buttonSm}`}
+                  disabled={assetPage >= Math.ceil(assetTotal / PAGE_SIZE)}
+                  onClick={() => void loadAssets(assetPage + 1)}
+                >
+                  下一页
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {tab === 'invites' ? (

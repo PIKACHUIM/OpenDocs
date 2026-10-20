@@ -63,6 +63,28 @@ export function createAssetRepo(sql: SqlClient) {
     return row?.n ?? 0;
   };
 
+  /** 管理端：全量附件（带所属用户邮箱） */
+  const listAll = (limit = 50, offset = 0) =>
+    sql.all<AssetRecord & { owner_email: string | null }>(
+      `SELECT a.*, u.email AS owner_email
+       FROM assets a LEFT JOIN users u ON u.id = a.owner_id
+       ORDER BY a.created_at DESC LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+  const countAll = async (): Promise<number> => {
+    const row = await sql.first<{ n: number }>('SELECT COUNT(*) AS n FROM assets');
+    return row?.n ?? 0;
+  };
+
+  /** 无引用：绑定过文档，但该文档已被彻底删除 */
+  const listUnreferenced = () =>
+    sql.all<AssetRecord>(
+      `SELECT * FROM assets a
+       WHERE a.document_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.id = a.document_id)`
+    );
+
   /** 全站已用容量，用于系统总配额校验 */
   const sumAllSize = async (): Promise<number> => {
     const row = await sql.first<{ n: number }>('SELECT SUM(size_bytes) AS n FROM assets');
@@ -84,6 +106,9 @@ export function createAssetRepo(sql: SqlClient) {
     listByDocument,
     listByOwner,
     countByOwner,
+    listAll,
+    countAll,
+    listUnreferenced,
     sumAllSize,
     sumSizeByOwner,
   };

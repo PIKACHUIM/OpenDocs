@@ -1,6 +1,7 @@
 import { api, apiBlob } from './client';
 import type { DocumentContent } from './content-types';
 import type {
+  AdminAsset,
   AdminInviteCode,
   AdminSettings,
   AdminStats,
@@ -237,6 +238,20 @@ export const adminApi = {
     turnstileSiteKey?: string;
     turnstileSecretKey?: string | null;
   }) => api<AdminSettings>('/admin/settings', { method: 'PATCH', json: patch }),
+
+  assets: (params: { page?: number; pageSize?: number }) =>
+    api<{
+      assets: AdminAsset[];
+      total: number;
+      unreferenced: number;
+      page: number;
+      pageSize: number;
+    }>(`/admin/assets${query(params)}`),
+
+  deleteAsset: (id: string) => api<{ ok: boolean }>(`/admin/assets/${id}`, { method: 'DELETE' }),
+
+  cleanupAssets: () =>
+    api<{ ok: boolean; removed: number }>('/admin/assets/cleanup', { method: 'POST' }),
 
   invites: () => api<{ invites: AdminInviteCode[] }>('/admin/invites'),
 
