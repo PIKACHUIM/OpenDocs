@@ -5,6 +5,7 @@ import {
   type ApiTeam,
   type ApiTeamMember,
 } from '../../api';
+import { UserPicker } from '../../ui/UserPicker';
 import styles from '../../ui/common.module.scss';
 
 /**
@@ -303,28 +304,19 @@ export function TeamAdminPanel() {
               {expanded ? (
                 <div style={{ marginTop: 16 }}>
                   <div className={styles.row} style={{ gap: 8, marginBottom: 10 }}>
-                    <input
-                      className={styles.input}
-                      placeholder="按邮箱添加成员"
-                      value={memberEmail}
-                      onChange={(event) => setMemberEmail(event.target.value)}
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className={styles.button}
-                      disabled={busy || !memberEmail.trim()}
-                      onClick={() =>
+                    <UserPicker
+                      placeholder="搜索站内用户（邮箱 / 昵称）"
+                      excludeIds={members.map((member) => member.userId)}
+                      disabled={busy}
+                      onPick={(picked) =>
                         run(async () => {
-                          await adminApi.addTeamMember(team.id, memberEmail.trim());
+                          await adminApi.addTeamMember(team.id, picked.email);
                           setMemberEmail('');
                           await loadMembers(team.id);
                           await load();
                         })
                       }
-                    >
-                      添加
-                    </button>
+                    />
                   </div>
 
                   {members.length === 0 ? (

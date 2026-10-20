@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { ApiEnv } from '../context';
 import { forbidden, unauthorized } from '../lib/http';
 import { createRepositories } from '../repos';
-import { SESSION_COOKIE } from '../repos/sessions';
+import { SESSION_COOKIE, SESSION_TTL_MS } from '../repos/sessions';
 import { resolveRuntime } from '../runtime';
 import { ensureAdmin } from '../services/bootstrap';
 import { createSettingsService } from '../services/settings';
@@ -43,6 +43,17 @@ export const withRuntime: MiddlewareHandler<ApiEnv> = async (c, next) => {
       const user = await repos.users.getById(session.user_id);
       if (user && !user.disabled) {
         c.set('user', user);
+        // 滑动续期：剩余不足一半时才写库，避免每个请求都 UPDATE
+        const remaining = new Date(session.expires_at).getTime() - Date.now();
+        if (remaining < SESSION_TTL_MS / 2) {
+          const renewTask = repos.sessions.renew(token).catch(() => undefined);
+          try {
+            // Workers/EdgeOne 都注入 ExecutionContext；本地适配层没有时直接让它异步跑完
+            c.executionCtx.waitUntil(renewTask);
+          } catch {
+            // 忽略：请求结束时 promise 仍会继续执行
+          }
+        }
       }
     }
   }

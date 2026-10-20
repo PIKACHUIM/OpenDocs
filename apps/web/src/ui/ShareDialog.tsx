@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError, documentApi, type ApiDocument, type DocumentMember, type LinkShareMode } from '../api';
 import { Modal } from './Modal';
+import { UserPicker } from './UserPicker';
 import styles from './common.module.scss';
 
 interface ShareDialogProps {
@@ -220,12 +221,13 @@ export function ShareDialog({ open, onClose, document, onChanged }: ShareDialogP
       ) : (
         <>
           <div className={styles.row} style={{ marginBottom: 14 }}>
-            <input
-              className={styles.input}
-              placeholder="对方的注册邮箱"
-              value={memberEmail}
-              onChange={(event) => setMemberEmail(event.target.value)}
-              style={{ flex: 1 }}
+            <UserPicker
+              placeholder="搜索站内用户（邮箱 / 昵称）"
+              excludeIds={members.map((member) => member.userId)}
+              disabled={busy}
+              onPick={(picked) => {
+                setMemberEmail(picked.email);
+              }}
             />
             <label className={styles.checkboxRow}>
               <input

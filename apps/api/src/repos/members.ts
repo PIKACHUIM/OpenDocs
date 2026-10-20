@@ -58,6 +58,10 @@ export function createMemberRepo(sql: SqlClient) {
   const removeAllForDocument = (documentId: string) =>
     sql.run('DELETE FROM document_members WHERE document_id = ?', [documentId]);
 
+  /** 删号时清理该用户在所有文档上的授权（GUID 不复用，留着也只会污染列表） */
+  const removeAllForUser = (userId: string) =>
+    sql.run('DELETE FROM document_members WHERE user_id = ?', [userId]);
+
   /** 旧接口：只取角色 */
   const getRole = async (
     documentId: string,
@@ -97,7 +101,15 @@ export function createMemberRepo(sql: SqlClient) {
       [documentId]
     );
 
-  return { upsert, remove, removeAllForDocument, getRole, getPermissions, listByDocument };
+  return {
+    upsert,
+    remove,
+    removeAllForDocument,
+    removeAllForUser,
+    getRole,
+    getPermissions,
+    listByDocument,
+  };
 }
 
 /** 文件夹分享授权 */
@@ -152,6 +164,9 @@ export function createFolderMemberRepo(sql: SqlClient) {
   const removeAllForFolder = (folderId: string) =>
     sql.run('DELETE FROM folder_members WHERE folder_id = ?', [folderId]);
 
+  const removeAllForUser = (userId: string) =>
+    sql.run('DELETE FROM folder_members WHERE user_id = ?', [userId]);
+
   /** 别人分享给我的目录（附带目录本身的信息） */
   const listSharedWithUser = (userId: string) =>
     sql.all<
@@ -169,7 +184,15 @@ export function createFolderMemberRepo(sql: SqlClient) {
       [userId]
     );
 
-  return { upsert, get, listByFolder, remove, removeAllForFolder, listSharedWithUser };
+  return {
+    upsert,
+    get,
+    listByFolder,
+    remove,
+    removeAllForFolder,
+    removeAllForUser,
+    listSharedWithUser,
+  };
 }
 
 export type MemberRepo = ReturnType<typeof createMemberRepo>;

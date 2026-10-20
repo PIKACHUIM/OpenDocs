@@ -141,6 +141,10 @@ folderRoutes.post('/:id/members', async (c) => {
   const email = requireString(body.email, 'email', { max: 200 });
   const target = await c.get('repos').users.getByEmail(email.trim().toLowerCase());
   if (!target) throw notFound('该邮箱未注册，无法分享', 'USER_NOT_FOUND');
+  // 未验证邮箱可能被冒名注册，分享前必须确认对方真的验证过
+  if (!target.email_verified) {
+    throw badRequest('该邮箱尚未完成验证，请对方先验证邮箱后再分享', 'TARGET_UNVERIFIED');
+  }
   if (target.id === folder.owner_id) throw badRequest('所有者无需添加');
 
   const bool = (value: unknown, fallback: boolean) =>

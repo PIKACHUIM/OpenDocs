@@ -10,6 +10,7 @@ import { documentRoutes } from './routes/documents';
 import { folderRoutes } from './routes/folders';
 import { shareRoutes } from './routes/share';
 import { teamRoutes } from './routes/teams';
+import { userRoutes } from './routes/users';
 
 export type { ApiBindings, ApiEnv, ApiVariables, Runtime } from './context';
 export { resolveRuntime } from './runtime';
@@ -25,8 +26,13 @@ export { resolveRuntime } from './runtime';
 export function createApp() {
   const app = new Hono<ApiEnv>();
 
-  app.onError((error) => errorResponse(error));
-  app.notFound((c) => json({ error: `接口不存在: ${c.req.path}`, code: 'NOT_FOUND' }, 404));
+  app.onError((error) => {
+    // 保留一条服务端日志：Worker 的 tail / node 控制台都能看到，便于定位 500
+    console.error('[api]', error);
+    return errorResponse(error);
+  });
+  // 不回显用户可控的 path，避免反射内容/日志注入
+  app.notFound((c) => json({ error: '接口不存在', code: 'NOT_FOUND' }, 404));
 
   // 同域部署时不需要 CORS；跨域调试可用 CORS_ORIGIN 显式放行
   app.use(
@@ -48,15 +54,27 @@ export function createApp() {
     })
   );
 
+  // 响应后处理：
+  // 1) CORS 未命中白名单时不下发 ACAC（否则等于告诉浏览器「任意来源都可带凭证」）
+  // 2) 补 Referrer-Policy，避免 API 路径经 Referer 外泄到第三方
+  app.use('/api/*', async (c, next) => {
+    await next();
+    try {
+      if (!c.res.headers.get('access-control-allow-origin')) {
+        c.res.headers.delete('access-control-allow-credentials');
+      }
+      if (!c.res.headers.get('referrer-policy')) {
+        c.res.headers.set('referrer-policy', 'no-referrer');
+      }
+    } catch {
+      // 某些运行时的 Response headers 不可变，忽略即可（不影响主流程）
+    }
+  });
+
   app.use('*', withRuntime);
 
-  app.get('/api/health', (c) =>
-    json({
-      ok: true,
-      storage: c.get('runtime').platform,
-      time: new Date().toISOString(),
-    })
-  );
+  // 健康检查只回 ok：存储后端（d1+r2 / node-sqlite+disk）属于部署内部信息
+  app.get('/api/health', (c) => json({ ok: true }));
 
   app.route('/api/auth', authRoutes);
   app.route('/api/documents', documentRoutes);
@@ -64,6 +82,7 @@ export function createApp() {
   app.route('/api/share', shareRoutes);
   app.route('/api/assets', assetRoutes);
   app.route('/api/teams', teamRoutes);
+  app.route('/api/users', userRoutes);
   app.route('/api/admin', adminRoutes);
 
   return app;

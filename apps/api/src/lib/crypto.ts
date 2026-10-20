@@ -50,8 +50,24 @@ export interface PasswordHash {
  * 超过会直接抛错 —— 也就是线上注册/登录全部失败。已有哈希在记录里保存了各自的迭代次数，
  * 校验时按记录值计算，因此调整默认值不影响老账号。
  */
-const DEFAULT_ITERATIONS = 100_000;
+export const DEFAULT_ITERATIONS = 100_000;
 const KEY_BITS = 256;
+
+/**
+ * 登录「等时」用的假哈希：账号不存在时也跑一次同样迭代数的 PBKDF2，
+ * 否则响应耗时会泄露邮箱是否已注册（实测差 ~50ms，可稳定枚举）。
+ */
+export const DUMMY_PASSWORD_HASH: PasswordHash = {
+  // 32 字节全零 → base64url（43 字符）；16 字节全零盐 → base64url（22 字符）
+  hash: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  salt: 'AAAAAAAAAAAAAAAAAAAAAA',
+  iterations: DEFAULT_ITERATIONS,
+};
+
+/** 存储里的迭代数落后于当前默认值时，登录成功后应就地重哈希 */
+export function needsRehash(stored: PasswordHash): boolean {
+  return stored.iterations !== DEFAULT_ITERATIONS;
+}
 
 async function derive(password: string, salt: Bytes, iterations: number): Promise<Bytes> {
   const key = await crypto.subtle.importKey('raw', utf8ToBytes(password), 'PBKDF2', false, [

@@ -20,10 +20,15 @@ export async function ensureAdmin(env: ApiBindings, users: UserRepo, dbKey: obje
   try {
     const existing = await users.getByEmail(email);
     if (existing) {
+      // 只创建、不改写：以前这里会把「已存在的同名账号」直接提权并解封，
+      // 一旦 ADMIN_EMAIL 误配成普通用户（甚至被攻击者抢先注册），
+      // 每个请求都会把对方变成管理员，属于配置即后门。
       if (existing.role !== 'admin' || existing.disabled) {
-        await users.update(existing.id, { role: 'admin', disabled: false });
-        console.log(`[api] 已将 ${email} 提升为管理员`);
+        console.warn(
+          `[api] ADMIN_EMAIL=${email} 已存在但不是可用管理员；出于安全考虑不再自动提权，请到管理后台手动处理`
+        );
       }
+      ensuredPerDb.add(dbKey);
     } else {
       await users.create({
         email,

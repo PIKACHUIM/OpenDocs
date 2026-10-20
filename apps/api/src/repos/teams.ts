@@ -1,5 +1,5 @@
 import type { SqlClient } from '../db/sql';
-import { randomId } from '../lib/crypto';
+import { randomId, sha256Hex } from '../lib/crypto';
 import type { TeamMemberRecord, TeamRecord } from './types';
 
 export interface CreateTeamInput {
@@ -50,6 +50,7 @@ export function createTeamRepo(sql: SqlClient) {
       max_file_bytes: input.maxFileBytes ?? 0,
       readonly: flag(input.readonly, false),
       invite_token: null,
+      invite_token_hash: null,
       default_can_create: flag(input.defaultCanCreate, true),
       default_can_update: flag(input.defaultCanUpdate, true),
       default_can_delete: flag(input.defaultCanDelete, false),
@@ -146,16 +147,35 @@ export function createTeamRepo(sql: SqlClient) {
     return next;
   };
 
+  /**
+   * 生成/清空邀请令牌。
+   * 数据库里只保留 SHA-256（`invite_token_hash`），明文只在生成时返回一次：
+   * 之前明文存储 + 通过 /api/teams 下发给所有成员，等于把空间口令公开了。
+   */
   const setInviteToken = async (id: string, token: string | null): Promise<void> => {
-    await sql.run('UPDATE teams SET invite_token = ?, updated_at = ? WHERE id = ?', [
-      token,
+    await sql.run('UPDATE teams SET invite_token = NULL, invite_token_hash = ?, updated_at = ? WHERE id = ?', [
+      token ? await sha256Hex(token) : null,
       new Date().toISOString(),
       id,
     ]);
   };
 
-  const findByInviteToken = async (token: string): Promise<TeamRecord | null> =>
-    sql.first<TeamRecord>('SELECT * FROM teams WHERE invite_token = ?', [token]);
+  const findByInviteToken = async (token: string): Promise<TeamRecord | null> => {
+    if (!token) return null;
+    const hashed = await sql.first<TeamRecord>(
+      'SELECT * FROM teams WHERE invite_token_hash = ?',
+      [await sha256Hex(token)]
+    );
+    if (hashed) return hashed;
+
+    // 兼容历史数据：老库里的令牌是明文，命中后立刻迁移成哈希
+    const legacy = await sql.first<TeamRecord>('SELECT * FROM teams WHERE invite_token = ?', [token]);
+    if (legacy) {
+      await setInviteToken(legacy.id, token);
+      return { ...legacy, invite_token: null, invite_token_hash: await sha256Hex(token) };
+    }
+    return null;
+  };
 
   const remove = async (id: string): Promise<void> => {
     await sql.run('DELETE FROM team_members WHERE team_id = ?', [id]);
@@ -207,6 +227,10 @@ export function createTeamRepo(sql: SqlClient) {
   const removeMember = (teamId: string, userId: string) =>
     sql.run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [teamId, userId]);
 
+  /** 删号时清理该用户在全部团队的成员关系 */
+  const removeAllForUser = (userId: string) =>
+    sql.run('DELETE FROM team_members WHERE user_id = ?', [userId]);
+
   const listByUser = (userId: string) =>
     sql.all<TeamRecord & Partial<TeamMemberRecord>>(
       `SELECT t.*, m.can_create, m.can_update, m.can_delete, m.is_admin
@@ -250,6 +274,7 @@ export function createTeamRepo(sql: SqlClient) {
     getMember,
     listMembers,
     removeMember,
+    removeAllForUser,
     listByUser,
     countMembers,
     stats,

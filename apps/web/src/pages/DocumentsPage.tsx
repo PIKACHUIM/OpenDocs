@@ -15,7 +15,9 @@ import { useAuth } from '../lib/auth';
 import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import { Modal } from '../ui/Modal';
 import { NewDocumentDialog } from '../ui/NewDocumentDialog';
+import { FolderShareDialog } from '../ui/FolderShareDialog';
 import { ShareDialog } from '../ui/ShareDialog';
+import { TeamManageDialog } from '../ui/TeamManageDialog';
 import { TopBar, VerifyEmailBanner } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
@@ -131,6 +133,10 @@ export function DocumentsPage() {
   /** 选完类型后打开的新建弹窗（最近文档 + 模板） */
   const [newDocType, setNewDocType] = useState<DocumentType | null>(null);
   const [shareTarget, setShareTarget] = useState<ApiDocument | null>(null);
+  /** 目录分享弹窗 */
+  const [folderShare, setFolderShare] = useState<ApiFolder | null>(null);
+  /** 团队管理员弹窗 */
+  const [teamManage, setTeamManage] = useState<ApiTeam | null>(null);
   const [renameTarget, setRenameTarget] = useState<ApiDocument | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [moveTarget, setMoveTarget] = useState<ApiDocument | null>(null);
@@ -466,7 +472,7 @@ export function DocumentsPage() {
           <DropdownItem onClick={() => toggleStar(doc)}>
             {doc.starred ? '取消收藏' : '收藏'}
           </DropdownItem>
-          <DropdownItem onClick={() => setShareTarget(doc)}>分享</DropdownItem>
+          <DropdownItem onClick={() => setShareTarget(doc)}>设置权限 / 分享</DropdownItem>
           <DropdownItem onClick={() => duplicateDocument(doc)}>创建副本</DropdownItem>
           <DropdownItem onClick={() => removeDocument(doc)}>移入回收站</DropdownItem>
         </>
@@ -491,16 +497,22 @@ export function DocumentsPage() {
         </span>
         {doc.starred ? <span className={`${styles.tag} ${styles.tagMuted}`}>已收藏</span> : null}
         {doc.linkShared ? <span className={`${styles.tag} ${styles.tagMuted}`}>已分享</span> : null}
-        <span
-          className={`${styles.tag} ${doc.myRole === 'viewer' ? styles.tagMuted : ''}`}
-          title="当前账号对该文档的权限"
-        >
-          {doc.myRole === 'owner' ? '可删除' : doc.myRole === 'editor' ? '可编辑' : '只读'}
-        </span>
       </span>
       <span>{doc.myRole === 'owner' || !doc.ownerName ? '我' : doc.ownerName}</span>
       <span>{locationLabel(doc)}</span>
       <span>{formatTime(doc.lastOpenedAt ?? doc.updatedAt)}</span>
+      <span className={styles.permissionCell}>
+        {doc.permissions?.canUpdate ? (
+          <span className={styles.permissionOn}>√ 编辑</span>
+        ) : (
+          <span className={styles.permissionOff}>— 编辑</span>
+        )}
+        {doc.permissions?.canDelete ? (
+          <span className={styles.permissionOn}>√ 删除</span>
+        ) : (
+          <span className={styles.permissionOff}>— 删除</span>
+        )}
+      </span>
       <span className={styles.listRowActions} onClick={(event) => event.stopPropagation()}>
         <span className={styles.listSize}>{formatSize(doc.sizeBytes)}</span>
         <button
@@ -630,9 +642,19 @@ export function DocumentsPage() {
                     setScope('owned');
                     setPage(1);
                   }}
+                  onContextMenu={(event) => {
+                    // 只有团队管理员能管理成员与邀请；普通成员右键不弹菜单
+                    if (!team.permissions?.isAdmin) return;
+                    event.preventDefault();
+                    setTeamManage(team);
+                  }}
                 >
                   <span className={styles.sidebarItemText}>{team.name}</span>
-                  {team.readonly ? <span className={styles.tag}>只读</span> : null}
+                  {team.permissions?.isAdmin ? (
+                    <span className={styles.tag}>管理员</span>
+                  ) : team.readonly ? (
+                    <span className={styles.tag}>只读</span>
+                  ) : null}
                 </button>
               ))
             : null}
@@ -780,6 +802,7 @@ export function DocumentsPage() {
                 <span>所有者</span>
                 <span>位置</span>
                 <span>最近查看</span>
+                <span>权限</span>
                 <span style={{ textAlign: 'right' }}>大小</span>
               </div>
               {documents.map(renderListItem)}
@@ -988,7 +1011,7 @@ export function DocumentsPage() {
               setShareTarget(menuDoc);
             }}
           >
-            分享
+            设置权限 / 分享
           </button>
           <button
             type="button"
@@ -1050,6 +1073,16 @@ export function DocumentsPage() {
           </button>
           <button
             type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              setFolderShare(menuFolder);
+            }}
+          >
+            设置权限 / 分享
+          </button>
+          <button
+            type="button"
             className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
             onClick={() => void removeFolder(menuFolder)}
           >
@@ -1068,6 +1101,16 @@ export function DocumentsPage() {
           }}
         />
       ) : null}
+
+      <FolderShareDialog folder={folderShare} onClose={() => setFolderShare(null)} />
+
+      <TeamManageDialog
+        team={teamManage}
+        onClose={() => {
+          setTeamManage(null);
+          void loadTeams();
+        }}
+      />
     </div>
   );
 }

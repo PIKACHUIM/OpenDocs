@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { ApiEnv } from '../context';
 import { assertContentSize, emptyContentFor, normalizeDocumentContent } from '../lib/document-content';
 import { getText } from '../files';
+import { pendingContentKey } from '../repos/documents';
 import { badRequest, forbidden, json, notFound, readJson } from '../lib/http';
 import { toPublicDocument } from '../repos/types';
 
@@ -42,15 +43,21 @@ shareRoutes.put('/:token', async (c) => {
       ? body.baseVersion
       : undefined;
 
-  await c.get('runtime').files.put(document.content_key, serialized, 'application/json');
-  const result = await c.get('repos').documents.saveContent(document.id, {
+  // 与登录态保存一致：先写临时 key，再由 CAS 提交切换指针
+  const pendingKey = pendingContentKey(document.id);
+  await c.get('runtime').files.put(pendingKey, serialized, 'application/json');
+  const result = await c.get('repos').documents.commitContent(document.id, {
     sizeBytes: serialized.length,
     baseVersion,
     // 匿名访客没有 userId，仅记录「最近一次是匿名编辑」
     editedBy: null,
+    pendingKey,
   });
 
-  if (result.conflict) {
+  if (result.status === 'missing') throw notFound('文档不存在或已被删除');
+
+  if (result.status === 'conflict') {
+    await c.get('runtime').files.delete(pendingKey).catch(() => undefined);
     return json(
       {
         error: '文档已在其它设备被修改，请刷新后再保存',
@@ -59,6 +66,10 @@ shareRoutes.put('/:token', async (c) => {
       },
       409
     );
+  }
+
+  if (result.document && result.document.content_key !== document.content_key) {
+    await c.get('runtime').files.delete(document.content_key).catch(() => undefined);
   }
 
   return json({ document: toPublicDocument(result.document ?? document), mode: document.link_mode });

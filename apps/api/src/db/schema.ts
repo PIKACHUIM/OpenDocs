@@ -134,6 +134,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     max_file_bytes INTEGER NOT NULL DEFAULT 0,
     readonly INTEGER NOT NULL DEFAULT 0,
     invite_token TEXT,
+    invite_token_hash TEXT,
     default_can_create INTEGER NOT NULL DEFAULT 1,
     default_can_update INTEGER NOT NULL DEFAULT 1,
     default_can_delete INTEGER NOT NULL DEFAULT 0,
@@ -143,6 +144,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite ON teams (invite_token)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite_hash ON teams (invite_token_hash)`,
 
   `CREATE TABLE IF NOT EXISTS team_members (
     team_id TEXT NOT NULL,
@@ -185,6 +187,9 @@ const COLUMN_PATCHES: string[] = [
   // 文档级权限：查看/修改（删除只属于所有者，不开放授权）
   'ALTER TABLE document_members ADD COLUMN can_read INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE document_members ADD COLUMN can_update INTEGER NOT NULL DEFAULT 0',
+  // 团队邀请令牌只存哈希（明文仅生成时返回一次）
+  'ALTER TABLE teams ADD COLUMN invite_token_hash TEXT',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite_hash ON teams (invite_token_hash)',
 ];
 
 const ready = new Map<string, Promise<void>>();

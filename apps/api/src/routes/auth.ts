@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
 import type { ApiEnv } from '../context';
-import { hashPassword, verifyPassword } from '../lib/crypto';
+import { DEFAULT_ITERATIONS, DUMMY_PASSWORD_HASH, hashPassword, needsRehash, verifyPassword } from '../lib/crypto';
 import {
   badRequest,
   clientIp,
@@ -17,6 +17,7 @@ import {
   tooManyRequests,
   unauthorized,
 } from '../lib/http';
+import { RATE_LIMITS, enforceRateLimit } from '../lib/rate-limit';
 import { requireAuth } from '../middleware';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '../repos/sessions';
 import { normalizeEmail } from '../repos/users';
@@ -27,10 +28,48 @@ import { verifyTurnstile } from '../services/turnstile';
 
 export const authRoutes = new Hono<ApiEnv>();
 
+/**
+ * 是否给 Cookie 打 Secure。
+ *
+ * 只认请求 URL 的协议，**不再信任 `X-Forwarded-Proto`**：那是客户端可伪造的头，
+ * 用它决定安全属性等于把降级开关交给攻击者。Workers / EdgeOne 上 request.url
+ * 本来就是 https，本地 http 调试则正确地不加 Secure。
+ */
 function isSecureRequest(c: Context<ApiEnv>): boolean {
-  const url = new URL(c.req.url);
-  if (url.protocol === 'https:') return true;
-  return (c.req.header('x-forwarded-proto') ?? '').split(',')[0].trim() === 'https';
+  return new URL(c.req.url).protocol === 'https:';
+}
+
+/**
+ * 邮件里绝对链接的站点地址。
+ *
+ * 优先用设置/环境变量里的 `SITE_URL`；未配置时回退到请求域名，但可以用
+ * `ALLOWED_HOSTS`（逗号分隔）把回退限制在可信域名内——否则 Host 头一旦可被改写，
+ * 找回密码链接就会把令牌送到攻击者域名。
+ */
+async function resolveSiteOrigin(c: Context<ApiEnv>): Promise<string | null> {
+  const configured = (await c.get('settings').siteUrl()).trim();
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const origin = new URL(c.req.url);
+  const allowList = (c.env.ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowList.length > 0 && !allowList.includes(origin.host.toLowerCase())) {
+    console.error('[auth] 未配置 SITE_URL，且请求域名不在 ALLOWED_HOSTS 内，已拒绝生成邮件链接');
+    return null;
+  }
+  console.warn('[auth] 未配置 SITE_URL，邮件链接回退到请求域名，建议显式配置以免受 Host 头影响');
+  return origin.origin;
+}
+
+/** 邮件发送走 waitUntil，避免 SMTP/HTTP 抖动把注册、找回密码的响应拖住 */
+function sendEmailInBackground(c: Context<ApiEnv>, task: Promise<unknown>) {
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    void task;
+  }
 }
 
 function setSessionCookie(c: Context<ApiEnv>, token: string) {
@@ -69,15 +108,20 @@ async function requireTurnstile(c: Context<ApiEnv>, token: unknown) {
   if (!result.ok) throw tooManyRequests(result.reason ?? '人机验证未通过');
 }
 
-async function issueAndSendVerifyEmail(c: Context<ApiEnv>, userId: string, email: string) {
+/** 发送验证邮件；返回是否真的投递（未配置 Resend 时为 false，不再假装成功） */
+async function issueAndSendVerifyEmail(
+  c: Context<ApiEnv>,
+  userId: string,
+  email: string
+): Promise<boolean> {
   const { token } = await c.get('repos').authTokens.issue(userId, 'verify_email');
-  const [siteName, siteUrl, resend] = await Promise.all([
+  const [siteName, resend, origin] = await Promise.all([
     c.get('settings').siteName(),
-    c.get('settings').siteUrl(),
     c.get('settings').resendConfig(),
+    resolveSiteOrigin(c),
   ]);
-  const content = buildVerifyEmail(siteName, siteUrl || new URL(c.req.url).origin, token);
-  await sendEmail(resend, { to: email, ...content });
+  if (!origin) return false;
+  return sendEmail(resend, { to: email, ...buildVerifyEmail(siteName, origin, token) });
 }
 
 authRoutes.post('/register', async (c) => {
@@ -96,6 +140,7 @@ authRoutes.post('/register', async (c) => {
   }>(c.req.raw);
 
   await requireTurnstile(c, body.turnstileToken);
+  enforceRateLimit(`register:ip:${clientIp((name) => c.req.header(name)) ?? 'unknown'}`, RATE_LIMITS.registerIp);
 
   const email = requireEmail(body.email);
   const password = requirePassword(body.password);
@@ -135,6 +180,16 @@ authRoutes.post('/register', async (c) => {
     }
   }
 
+  // 没有配置发信服务时根本无法完成邮箱验证；此时若仍把账号标记为未验证，
+  // 会导致这个实例上「谁都不能被分享」，等于把功能锁死。这种情况直接视为已验证，
+  // 并在日志里提示管理员；一旦配置了 Resend，就恢复「注册 → 验证 → 可被分享」链路。
+  const resend = await c.get('settings').resendConfig();
+  const mailEnabled = !!(resend.apiKey && resend.from);
+  if (!emailVerified && !mailEnabled) {
+    emailVerified = true;
+    console.warn('[auth] 未配置 Resend，新账号跳过邮箱验证（配置发信后自动恢复）');
+  }
+
   const user = await users.create({
     email,
     displayName,
@@ -155,10 +210,9 @@ authRoutes.post('/register', async (c) => {
   }
 
   let emailSent = false;
-  if (!emailVerified) {
+  if (!emailVerified && mailEnabled) {
     try {
-      await issueAndSendVerifyEmail(c, user.id, user.email);
-      emailSent = true;
+      emailSent = await issueAndSendVerifyEmail(c, user.id, user.email);
     } catch (error) {
       console.error('[auth] 发送验证邮件失败:', error);
     }
@@ -173,24 +227,42 @@ authRoutes.post('/login', async (c) => {
   );
   await requireTurnstile(c, body.turnstileToken);
 
+  const ip = clientIp((name) => c.req.header(name)) ?? 'unknown';
+  enforceRateLimit(`login:ip:${ip}`, RATE_LIMITS.loginIp);
+
   const email = normalizeEmail(requireString(body.email, 'email', { max: 200 }));
   const password = requireString(body.password, 'password', { min: 1, max: 200, trim: false });
+  // 按账号再限一层：换 IP 也不能无限猜同一个账号的密码
+  enforceRateLimit(`login:acct:${email}`, RATE_LIMITS.loginAccount);
 
   const users = c.get('repos').users;
   const user = await users.getByEmail(email);
 
   // 账号不存在与密码错误返回同一文案，避免被用来枚举已注册邮箱
-  if (!user) throw unauthorized('邮箱或密码不正确', 'INVALID_CREDENTIALS');
+  if (!user) {
+    // 等时处理：对不存在的账号也跑一次同成本的 PBKDF2，否则响应耗时（实测差 50ms）
+    // 会稳定泄露「该邮箱是否已注册」
+    await verifyPassword(password, DUMMY_PASSWORD_HASH);
+    throw unauthorized('邮箱或密码不正确', 'INVALID_CREDENTIALS');
+  }
   if (user.disabled) throw forbidden('账号已被禁用，请联系管理员');
-  if (!(await verifyPassword(password, {
+  const stored = {
     hash: user.password_hash,
     salt: user.password_salt,
     iterations: user.password_iterations,
-  }))) {
+  };
+  if (!(await verifyPassword(password, stored))) {
     throw unauthorized('邮箱或密码不正确', 'INVALID_CREDENTIALS');
   }
 
-  await users.update(user.id, { lastLoginAt: new Date().toISOString() });
+  // 迭代数落后于当前默认值时，登录成功后顺带升级哈希（用户无感）
+  const patch: { lastLoginAt: string; password?: Awaited<ReturnType<typeof hashPassword>> } = {
+    lastLoginAt: new Date().toISOString(),
+  };
+  if (needsRehash(stored)) {
+    patch.password = await hashPassword(password, DEFAULT_ITERATIONS);
+  }
+  await users.update(user.id, patch);
   return createSessionAndRespond(c, user.id);
 });
 
@@ -208,7 +280,8 @@ authRoutes.get('/me', async (c) => {
     user: user ? toPublicUser(user) : null,
     // 前端据此决定是否显示「设为管理员 / 取消管理员」
     isSuperAdmin: !!user && user.id === superAdminId,
-    storage: c.get('runtime').platform,
+    // 存储驱动属于部署内部信息，只给已登录用户看
+    storage: user ? c.get('runtime').platform : '',
     config: await c.get('settings').publicConfig(),
   });
 });
@@ -238,11 +311,16 @@ authRoutes.post('/password', requireAuth, async (c) => {
 authRoutes.post('/verify-email/resend', requireAuth, async (c) => {
   const user = c.get('user')!;
   if (user.email_verified) return json({ ok: true, alreadyVerified: true });
-  await issueAndSendVerifyEmail(c, user.id, user.email);
-  return json({ ok: true });
+  enforceRateLimit(`verify-resend:${user.id}`, RATE_LIMITS.forgotAccount);
+  const sent = await issueAndSendVerifyEmail(c, user.id, user.email);
+  return json({ ok: true, sent });
 });
 
 authRoutes.post('/verify-email', async (c) => {
+  enforceRateLimit(
+    `verify-email:ip:${clientIp((name) => c.req.header(name)) ?? 'unknown'}`,
+    RATE_LIMITS.authTokenIp
+  );
   const body = await readJson<{ token?: unknown }>(c.req.raw);
   const token = requireString(body.token, 'token');
   const userId = await c.get('repos').authTokens.consume(token, 'verify_email');
@@ -253,30 +331,40 @@ authRoutes.post('/verify-email', async (c) => {
 
 /** 始终返回同一条成功文案，避免被用来枚举已注册邮箱 */
 authRoutes.post('/forgot-password', async (c) => {
+  enforceRateLimit(
+    `forgot:ip:${clientIp((name) => c.req.header(name)) ?? 'unknown'}`,
+    RATE_LIMITS.forgotIp
+  );
   const body = await readJson<{ email?: unknown; turnstileToken?: unknown }>(c.req.raw);
   await requireTurnstile(c, body.turnstileToken);
   const email = normalizeEmail(requireString(body.email, 'email', { max: 200 }));
+  // 同一邮箱也限流：避免被用作「邮件轰炸别人的收件箱」
+  enforceRateLimit(`forgot:acct:${email}`, RATE_LIMITS.forgotAccount);
 
   const user = await c.get('repos').users.getByEmail(email);
   if (user && !user.disabled) {
-    try {
+    const task = (async () => {
       const { token } = await c.get('repos').authTokens.issue(user.id, 'reset_password');
-      const [siteName, siteUrl, resend] = await Promise.all([
+      const [siteName, resend, origin] = await Promise.all([
         c.get('settings').siteName(),
-        c.get('settings').siteUrl(),
         c.get('settings').resendConfig(),
+        resolveSiteOrigin(c),
       ]);
-      const content = buildResetPasswordEmail(siteName, siteUrl || new URL(c.req.url).origin, token);
-      await sendEmail(resend, { to: user.email, ...content });
-    } catch (error) {
-      console.error('[auth] 发送找回密码邮件失败:', error);
-    }
+      if (!origin) return;
+      await sendEmail(resend, { to: user.email, ...buildResetPasswordEmail(siteName, origin, token) });
+    })();
+    // 发信放到后台，响应耗时与「邮箱是否已注册」解耦（同样是为了消除枚举侧信道）
+    sendEmailInBackground(c, task.catch((error) => console.error('[auth] 发送找回密码邮件失败:', error)));
   }
 
   return json({ ok: true, message: '如果该邮箱已注册，我们已发送找回密码邮件' });
 });
 
 authRoutes.post('/reset-password', async (c) => {
+  enforceRateLimit(
+    `reset-password:ip:${clientIp((name) => c.req.header(name)) ?? 'unknown'}`,
+    RATE_LIMITS.authTokenIp
+  );
   const body = await readJson<{ token?: unknown; newPassword?: unknown }>(c.req.raw);
   const token = requireString(body.token, 'token');
   const newPassword = requirePassword(body.newPassword, 'newPassword');

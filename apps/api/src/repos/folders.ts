@@ -99,6 +99,10 @@ export function createFolderRepo(sql: SqlClient) {
     return false;
   };
 
+  /** 删号时清理该用户自己的目录（文档已先按 owner 删除） */
+  const removeAllForOwner = (ownerId: string) =>
+    sql.run('DELETE FROM folders WHERE owner_id = ?', [ownerId]);
+
   return {
     getById,
     getActive,
@@ -108,6 +112,7 @@ export function createFolderRepo(sql: SqlClient) {
     move,
     softDelete,
     reparentChildren,
+    removeAllForOwner,
     isInSubtree,
   };
 }

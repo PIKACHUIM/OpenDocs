@@ -28,7 +28,24 @@ export const tooManyRequests = (message: string) =>
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
+  // 所有 JSON 接口统一禁止内容嗅探：即使某天有人把错误页/文本写进响应，
+  // 浏览器也不会把它当 HTML 执行（配合 CSP 一起用）
+  'X-Content-Type-Options': 'nosniff',
 };
+
+/** 请求体上限：单文档正文 8MB + JSON 信封与 base64 余量 */
+export const MAX_REQUEST_BYTES = 9 * 1024 * 1024;
+
+/**
+ * 在解析 JSON / multipart 之前先按 Content-Length 拦掉超大请求，
+ * 避免把整包读进内存后才在业务层报错。
+ */
+export function assertRequestSize(request: Request, limit = MAX_REQUEST_BYTES): void {
+  const raw = request.headers.get('content-length');
+  if (!raw) return;
+  const length = Number.parseInt(raw, 10);
+  if (Number.isFinite(length) && length > limit) throw tooLarge('请求体过大');
+}
 
 export function json(data: unknown, status = 200, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(data), {
@@ -50,6 +67,7 @@ export function errorResponse(error: unknown): Response {
 }
 
 export async function readJson<T = Record<string, unknown>>(request: Request): Promise<T> {
+  assertRequestSize(request);
   let data: unknown;
   try {
     data = await request.json();

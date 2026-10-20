@@ -22,6 +22,14 @@ export interface AdminUser extends ApiUser {
   isSuperAdmin?: boolean;
 }
 
+/** 用户选择器返回的最小用户信息 */
+export interface PickableUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role?: 'user' | 'admin';
+}
+
 export interface ApiDocument {
   id: string;
   type: DocumentType;
@@ -40,6 +48,10 @@ export interface ApiDocument {
   starred: boolean;
   lastOpenedAt: string | null;
   myRole?: 'owner' | DocumentMemberRole;
+  /** 列表直接展示「编辑 / 删除」两列 */
+  permissions?: PermissionSet;
+  /** 所属团队空间；null 表示个人空间 */
+  teamId?: string | null;
 }
 
 /** 目录（文件夹），parentId 为 null 表示根级 */

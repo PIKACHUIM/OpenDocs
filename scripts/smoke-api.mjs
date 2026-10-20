@@ -683,6 +683,68 @@ console.log('\n[11] 超级管理员：设置/取消管理员、自我保护');
   check('超级管理员不能删除自己', selfDelete.status === 409, selfDelete.data);
 }
 
+console.log('\n[12] 用户选择器与团队管理员');
+{
+  // 站内用户检索
+  cookie = adminCookie;
+  const search = await call('GET', '/api/users/search?q=carol');
+  check(
+    '用户检索可按关键字筛选',
+    Array.isArray(search.data?.users) &&
+      search.data.users.length === 1 &&
+      search.data.users[0].email === 'carol@example.com',
+    search.data
+  );
+
+  // 建团队并让 carol 加入，再把她设为团队管理员
+  const created = await call('POST', '/api/admin/teams', { name: '团队管理员测试' });
+  const teamId = created.data?.team?.id ?? '';
+  const invite = await call('POST', `/api/admin/teams/${teamId}/invite`);
+
+  cookie = carolCookie;
+  await call('POST', '/api/teams/join', { token: invite.data.inviteToken });
+
+  cookie = adminCookie;
+  const members = await call('GET', `/api/admin/teams/${teamId}/members`);
+  const carolMember = members.data?.members?.find((m) => m.email === 'carol@example.com');
+  await call('PATCH', `/api/admin/teams/${teamId}/members/${carolMember.userId}`, {
+    isAdmin: true,
+  });
+
+  // 团队管理员可以读成员、重置邀请链接
+  cookie = carolCookie;
+  const teamMembers = await call('GET', `/api/teams/${teamId}/members`);
+  check('团队管理员可查看成员', teamMembers.status === 200 && teamMembers.data?.members?.length >= 1, teamMembers.data);
+
+  const rotate = await call('POST', `/api/teams/${teamId}/invite`);
+  check('团队管理员可重置邀请令牌', rotate.status === 200 && !!rotate.data?.inviteToken, rotate.data);
+
+  // 团队管理员可以给团队内的文件设置权限
+  const teamDoc = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '团队管理员授权测试',
+    teamId,
+  });
+  const shareByTeamAdmin = await call('POST', `/api/documents/${teamDoc.data.document.id}/members`, {
+    email: 'bob@example.com',
+    canRead: true,
+    canUpdate: false,
+  });
+  check('团队管理员可设置文件权限', shareByTeamAdmin.status === 200, shareByTeamAdmin.data);
+
+  // 取消团队管理员后，同一账号就不能再管理成员（验证团队管理员这道闸门）
+  cookie = adminCookie;
+  await call('PATCH', `/api/admin/teams/${teamId}/members/${carolMember.userId}`, {
+    isAdmin: false,
+  });
+  cookie = carolCookie;
+  const byMember = await call('GET', `/api/teams/${teamId}/members`);
+  check('取消团队管理员后不能查看成员', byMember.status === 403, byMember.data);
+
+  cookie = adminCookie;
+  await call('DELETE', `/api/admin/teams/${teamId}`);
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));

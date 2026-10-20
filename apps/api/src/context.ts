@@ -20,6 +20,9 @@ export interface ApiBindings {
   FILE_DRIVER?: string;
   EDGEONE_BLOB_STORE?: string;
 
+  /** 允许访问的 Host（逗号分隔）；不填表示不限制，用于反代/自定义域名场景 */
+  ALLOWED_HOSTS?: string;
+
   /** 本地开发 / 测试注入的实现（Workers 上不会出现） */
   SQL?: SqlClient;
   FILES?: FileStore;

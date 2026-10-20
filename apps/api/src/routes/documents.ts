@@ -9,6 +9,7 @@ import {
   summarizeContent,
 } from '../lib/document-content';
 import { getText } from '../files';
+import { pendingContentKey } from '../repos/documents';
 import {
   badRequest,
   forbidden,
@@ -39,6 +40,21 @@ function assertType(type: unknown): DocumentType {
     throw badRequest(`type 必须是 ${DOCUMENT_TYPES.join('/')} 之一`);
   }
   return type as DocumentType;
+}
+
+/**
+ * 谁可以管理这份文档的协作者（设置权限）：
+ * 所有者、系统管理员、以及文档所在团队空间的团队管理员。
+ */
+async function canManageDocumentMembers(
+  c: Context<ApiEnv>,
+  document: DocumentRecord
+): Promise<boolean> {
+  const user = c.get('user')!;
+  if (user.role === 'admin' || document.owner_id === user.id) return true;
+  if (!document.team_id) return false;
+  const member = await c.get('repos').teams.getMember(document.team_id, user.id);
+  return !!member?.is_admin;
 }
 
 /**
@@ -138,6 +154,13 @@ documentRoutes.get('/', async (c) => {
       documents: result.items.map((item) =>
         toPublicDocument(item, {
           myRole: user.role === 'admin' ? 'owner' : (myRole as DocumentMemberRole | 'owner'),
+          permissions: {
+            canCreate: !!member?.can_create && !team.readonly,
+            canRead: true,
+            canUpdate: user.role === 'admin' || (!!member?.can_update && !team.readonly),
+            canDelete:
+              user.role === 'admin' || !!member?.is_admin || (!!member?.can_delete && !team.readonly),
+          },
         })
       ),
       total: result.total,
@@ -150,7 +173,15 @@ documentRoutes.get('/', async (c) => {
     const result = await c.get('repos').documents.listSharedWithMe(user.id, { page, pageSize, query });
     return json({
       documents: result.items.map((item) =>
-        toPublicDocument(item, { myRole: item.member_role as DocumentMemberRole })
+        toPublicDocument(item, {
+          myRole: item.member_role as DocumentMemberRole,
+          permissions: {
+            canCreate: false,
+            canRead: true,
+            canUpdate: item.member_role === 'editor',
+            canDelete: false,
+          },
+        })
       ),
       total: result.total,
       page: result.page,
@@ -161,25 +192,19 @@ documentRoutes.get('/', async (c) => {
   if (scope === 'sent') {
     const result = await c.get('repos').documents.listSharedByMe(user.id, { page, pageSize, query });
     return json({
-      documents: result.items.map((item) => toPublicDocument(item, { myRole: 'owner' })),
+      documents: result.items.map((item) => toPublicDocument(item, {
+        myRole: 'owner',
+        permissions: { canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+      })),
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
     });
   }
 
-  // 打开「最近删除」时惰性清理过期条目，避免为清理单独跑定时任务
-  let retentionDays: number | undefined;
-  if (trashed) {
-    retentionDays = await c.get('settings').trashRetentionDays();
-    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const expired = await c.get('repos').documents.listTrashedBefore(user.id, cutoff);
-    for (const doc of expired) {
-      await c.get('runtime').files.delete(doc.content_key);
-      await c.get('repos').members.removeAllForDocument(doc.id);
-      await c.get('repos').documents.hardDelete(doc.id);
-    }
-  }
+  // 只读列表不再承担清理职责：GET 带副作用会被预取/爬虫/图片探针意外触发。
+  // 过期条目由前端打开回收站后调用 POST /purge-trash 清理。
+  const retentionDays = trashed ? await c.get('settings').trashRetentionDays() : undefined;
 
   const result = await c.get('repos').documents.listOwned(user.id, {
     page,
@@ -192,12 +217,32 @@ documentRoutes.get('/', async (c) => {
     folderId,
   });
   return json({
-    documents: result.items.map((item) => toPublicDocument(item, { myRole: 'owner' })),
+    documents: result.items.map((item) => toPublicDocument(item, {
+        myRole: 'owner',
+        permissions: { canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+      })),
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
     retentionDays,
   });
+});
+
+/**
+ * 清理「最近删除」里超过保留期的文档。
+ * 显式 POST：不再让 GET 列表携带破坏性副作用。
+ */
+documentRoutes.post('/purge-trash', async (c) => {
+  const user = c.get('user')!;
+  const retentionDays = await c.get('settings').trashRetentionDays();
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const expired = await c.get('repos').documents.listTrashedBefore(user.id, cutoff);
+  for (const doc of expired) {
+    await c.get('runtime').files.delete(doc.content_key).catch(() => undefined);
+    await c.get('repos').members.removeAllForDocument(doc.id);
+    await c.get('repos').documents.hardDelete(doc.id);
+  }
+  return json({ ok: true, removed: expired.length, retentionDays });
 });
 
 documentRoutes.post('/', async (c) => {
@@ -303,17 +348,25 @@ documentRoutes.put('/:id', async (c) => {
       ? body.baseVersion
       : undefined;
 
-  // 先落内容再更新元数据：即使元数据更新失败，顶多版本号偏旧，不会丢内容
-  await c.get('runtime').files.put(document.content_key, serialized, 'application/json');
+  // CAS 提交：先写临时 key，再在一条 UPDATE 里同时切 key 与版本号。
+  // 版本冲突时不会覆盖任何已存在的内容（旧实现会先覆盖再判版本）。
+  const pendingKey = pendingContentKey(document.id);
+  await c.get('runtime').files.put(pendingKey, serialized, 'application/json');
 
-  const result = await c.get('repos').documents.saveContent(document.id, {
+  const result = await c.get('repos').documents.commitContent(document.id, {
     sizeBytes: serialized.length,
-    title: optionalString(body.title, 120),
+    // 标题属于「所有者自己的组织方式」，协作者只能改内容
+    title: access === 'owner' ? optionalString(body.title, 120) : undefined,
     baseVersion,
     editedBy: c.get('user')!.id,
+    pendingKey,
   });
 
-  if (result.conflict) {
+  if (result.status === 'missing') throw notFound('文档不存在或已被删除');
+
+  if (result.status === 'conflict') {
+    // 冲突时清掉刚上传的临时文件，避免留下孤儿对象
+    await c.get('runtime').files.delete(pendingKey).catch(() => undefined);
     return json(
       {
         error: '文档已在其它设备被修改，请刷新后再保存',
@@ -322,6 +375,11 @@ documentRoutes.put('/:id', async (c) => {
       },
       409
     );
+  }
+
+  // 内容已切到新的 pending key，旧版本对象可以删掉了（失败不影响本次保存）
+  if (result.document && result.document.content_key !== document.content_key) {
+    await c.get('runtime').files.delete(document.content_key).catch(() => undefined);
   }
 
   return json({
@@ -337,14 +395,17 @@ documentRoutes.patch('/:id', async (c) => {
 
   let updated: DocumentRecord | null = document;
 
+  // 标题、归档、收藏都属于「所有者自己的组织方式」，协作者（editor）只能改内容
+  if (body.title !== undefined && access !== 'owner') {
+    throw forbidden('只有所有者可以重命名文档');
+  }
+  if (body.folderId !== undefined || body.starred !== undefined) {
+    if (access !== 'owner') throw forbidden('只有所有者可以归档或收藏文档');
+  }
+
   if (body.title !== undefined) {
     const title = requireString(body.title, 'title', { max: 120 });
     updated = await c.get('repos').documents.rename(document.id, title);
-  }
-
-  // 归档与收藏属于「所有者自己的组织方式」，协作者（editor）无权改动
-  if (body.folderId !== undefined || body.starred !== undefined) {
-    if (access !== 'owner') throw forbidden('只有所有者可以归档或收藏文档');
   }
 
   if (body.folderId !== undefined) {
@@ -474,8 +535,8 @@ documentRoutes.post('/:id/members', async (c) => {
   const document = await c.get('repos').documents.getActive(c.req.param('id'));
   if (!document) throw notFound('文档不存在');
   const actor = c.get('user')!;
-  if (document.owner_id !== actor.id && actor.role !== 'admin') {
-    throw forbidden('只有所有者可以添加协作成员');
+  if (!(await canManageDocumentMembers(c, document))) {
+    throw forbidden('只有所有者或团队管理员可以设置文档权限');
   }
 
   const body = await readJson<{
@@ -505,6 +566,10 @@ documentRoutes.post('/:id/members', async (c) => {
 
   const target = await c.get('repos').users.getByEmail(email);
   if (!target) throw notFound('该邮箱未注册，无法添加为协作成员', 'USER_NOT_FOUND');
+  // 身份标识就是邮箱：未验证的账号可能是「抢先注册别人邮箱」的冒名者
+  if (!target.email_verified) {
+    throw badRequest('该邮箱尚未完成验证，请对方先验证邮箱后再分享', 'TARGET_UNVERIFIED');
+  }
   if (target.id === document.owner_id) throw badRequest('所有者无需添加为协作成员');
 
   await c.get('repos').members.upsert({
@@ -521,9 +586,8 @@ documentRoutes.post('/:id/members', async (c) => {
 documentRoutes.delete('/:id/members/:userId', async (c) => {
   const document = await c.get('repos').documents.getActive(c.req.param('id'));
   if (!document) throw notFound('文档不存在');
-  const actor = c.get('user')!;
-  if (document.owner_id !== actor.id && actor.role !== 'admin') {
-    throw forbidden('只有所有者可以移除协作成员');
+  if (!(await canManageDocumentMembers(c, document))) {
+    throw forbidden('只有所有者或团队管理员可以移除协作者');
   }
   await c.get('repos').members.remove(document.id, c.req.param('userId'));
   return json({ ok: true });

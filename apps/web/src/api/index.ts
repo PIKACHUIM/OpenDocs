@@ -5,6 +5,7 @@ import type {
   AdminInviteCode,
   ApiTeam,
   ApiTeamMember,
+  PickableUser,
   AdminSettings,
   AdminStats,
   AdminUser,
@@ -204,9 +205,34 @@ export const assetApi = {
   fetchBlob: (id: string) => apiBlob(`/assets/${id}`),
 };
 
-/** 团队空间（用户侧） */
+/** 站内用户检索（成员选择器） */
+export const userApi = {
+  search: (q: string) => api<{ users: PickableUser[] }>(`/users/search${query({ q })}`),
+};
+
+/** 团队空间（用户侧；团队管理员也可调用成员与邀请接口） */
 export const teamApi = {
   list: () => api<{ teams: ApiTeam[] }>('/teams'),
+
+  members: (id: string) => api<{ members: ApiTeamMember[] }>(`/teams/${id}/members`),
+
+  addMember: (id: string, email: string) =>
+    api<{ ok: boolean }>(`/teams/${id}/members`, { method: 'POST', json: { email } }),
+
+  updateMember: (
+    id: string,
+    userId: string,
+    json: Partial<Pick<ApiTeamMember, 'canCreate' | 'canUpdate' | 'canDelete' | 'isAdmin'>>
+  ) => api<{ ok: boolean }>(`/teams/${id}/members/${userId}`, { method: 'PATCH', json }),
+
+  removeMember: (id: string, userId: string) =>
+    api<{ ok: boolean }>(`/teams/${id}/members/${userId}`, { method: 'DELETE' }),
+
+  rotateInvite: (id: string) =>
+    api<{ ok: boolean; inviteToken: string }>(`/teams/${id}/invite`, { method: 'POST' }),
+
+  clearInvite: (id: string) =>
+    api<{ ok: boolean }>(`/teams/${id}/invite`, { method: 'DELETE' }),
   join: (token: string) =>
     api<{ ok: boolean; teamId: string; already?: boolean }>('/teams/join', {
       method: 'POST',
@@ -348,4 +374,27 @@ export const folderApi = {
     api<{ folder: ApiFolder }>(`/folders/${id}`, { method: 'PATCH', json: patch }),
 
   remove: (id: string) => api<{ ok: boolean }>(`/folders/${id}`, { method: 'DELETE' }),
+
+  /** 目录分享：成员与权限 */
+  members: (id: string) =>
+    api<{ members: Array<FolderMember & { email: string; displayName: string }> }>(
+      `/folders/${id}/members`
+    ),
+
+  addMember: (
+    id: string,
+    json: { email: string; canCreate: boolean; canRead: boolean; canUpdate: boolean; canDelete: boolean }
+  ) => api<{ ok: boolean }>(`/folders/${id}/members`, { method: 'POST', json }),
+
+  removeMember: (id: string, userId: string) =>
+    api<{ ok: boolean }>(`/folders/${id}/members/${userId}`, { method: 'DELETE' }),
 };
+
+/** 目录成员（前端展示用） */
+export interface FolderMember {
+  userId: string;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}

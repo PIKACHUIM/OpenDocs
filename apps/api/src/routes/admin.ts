@@ -149,21 +149,41 @@ adminRoutes.delete('/users/:id', async (c) => {
     if ((await countActiveAdmins(c)) <= 1) throw conflict('至少需要保留一个管理员');
   }
 
-  const owned = await c.get('repos').documents.listAll({
-    page: 1,
-    pageSize: 500,
-    ownerId: target.id,
-    includeTrashed: true,
-  });
-  for (const document of owned.items) {
-    await c.get('runtime').files.delete(document.content_key).catch(() => undefined);
-    await c.get('repos').members.removeAllForDocument(document.id);
-    await c.get('repos').documents.hardDelete(document.id);
+  // 分页循环清理：旧实现只处理前 500 篇，剩下的会变成无主数据（内容和元数据都留在库里）
+  let removedDocuments = 0;
+  for (;;) {
+    const owned = await c.get('repos').documents.listAll({
+      page: 1,
+      pageSize: 100,
+      ownerId: target.id,
+      includeTrashed: true,
+    });
+    if (owned.items.length === 0) break;
+    for (const document of owned.items) {
+      await c.get('runtime').files.delete(document.content_key).catch(() => undefined);
+      await c.get('repos').members.removeAllForDocument(document.id);
+      await c.get('repos').documents.hardDelete(document.id);
+      removedDocuments += 1;
+    }
   }
+
+  // 附件（含未绑定文档的素材）与各类授权关系一并清理
+  let removedAssets = 0;
+  const assets = await c.get('repos').assets.listAllByOwner(target.id);
+  for (const asset of assets) {
+    await c.get('runtime').files.delete(asset.file_key).catch(() => undefined);
+    await c.get('repos').assets.remove(asset.id);
+    removedAssets += 1;
+  }
+  await c.get('repos').members.removeAllForUser(target.id);
+  await c.get('repos').folderMembers.removeAllForUser(target.id);
+  await c.get('repos').teams.removeAllForUser(target.id);
+  await c.get('repos').folders.removeAllForOwner(target.id);
+  await c.get('repos').authTokens.removeByUser(target.id);
   await c.get('repos').sessions.removeByUser(target.id);
   await c.get('repos').users.remove(target.id);
 
-  return json({ ok: true, removedDocuments: owned.items.length });
+  return json({ ok: true, removedDocuments, removedAssets });
 });
 
 adminRoutes.get('/documents', async (c) => {
@@ -483,6 +503,9 @@ adminRoutes.post('/teams/:id/members', async (c) => {
         ? await c.get('repos').users.getByEmail(requireEmail(body.email))
         : null;
   if (!user) throw notFound('用户不存在');
+  if (!user.email_verified) {
+    throw badRequest('该邮箱尚未完成验证，请对方先验证邮箱后再添加', 'TARGET_UNVERIFIED');
+  }
 
   await c.get('repos').teams.addMember(team.id, user.id, {
     canCreate: !!team.default_can_create,
@@ -547,8 +570,10 @@ adminRoutes.post('/invites', async (c) => {
   let code: string | undefined;
   if (typeof body.code === 'string' && body.code.trim()) {
     code = body.code.trim().toUpperCase();
-    if (!/^[A-Z0-9-]{4,32}$/.test(code)) {
-      throw badRequest('邀请码只能由字母、数字、连字符组成，长度 4-32');
+    // 4 位字符只有 ~100 万种组合，配合无频率限制的注册接口等于可爆破；
+    // 8 位起（32 字符表 ≈ 40 bit）才具备基本抵抗力
+    if (!/^[A-Z0-9-]{8,32}$/.test(code)) {
+      throw badRequest('邀请码只能由字母、数字、连字符组成，长度 8-32');
     }
     if (await c.get('repos').invites.getByCode(code)) throw conflict('该邀请码已存在');
   }

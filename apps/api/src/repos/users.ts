@@ -1,4 +1,5 @@
 import type { SqlClient } from '../db/sql';
+import { likePattern } from '../db/sql';
 import { randomId, type PasswordHash } from '../lib/crypto';
 import type { UserRecord, UserRole } from './types';
 
@@ -142,6 +143,25 @@ export function createUserRepo(sql: SqlClient) {
   /** 兼容旧调用名 */
   const getFirstAdminId = getSuperAdminId;
 
+  /** 用户选择器：按邮箱/昵称模糊搜索（只返回必要字段） */
+  const search = (keyword: string, limit: number) => {
+    const pattern = likePattern(keyword);
+    return sql.all<Pick<UserRecord, 'id' | 'email' | 'display_name' | 'role'>>(
+      `SELECT id, email, display_name, role FROM users
+       WHERE disabled = 0 AND (email LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\')
+       ORDER BY email ASC LIMIT ?`,
+      [pattern, pattern, limit]
+    );
+  };
+
+  /** 未输入关键字时给最近的用户，避免选择器空白 */
+  const listRecent = (limit: number) =>
+    sql.all<Pick<UserRecord, 'id' | 'email' | 'display_name' | 'role'>>(
+      `SELECT id, email, display_name, role FROM users
+       WHERE disabled = 0 ORDER BY rowid DESC LIMIT ?`,
+      [limit]
+    );
+
   const count = async (): Promise<number> => {
     const row = await sql.first<{ n: number }>('SELECT COUNT(*) AS n FROM users');
     return row?.n ?? 0;
@@ -149,8 +169,10 @@ export function createUserRepo(sql: SqlClient) {
 
   const list = async (options: { page: number; pageSize: number; query?: string }) => {
     const offset = (options.page - 1) * options.pageSize;
-    const where = options.query ? 'WHERE email LIKE ? OR display_name LIKE ? OR id LIKE ?' : '';
-    const likeValue = options.query ? `%${options.query}%` : null;
+    const where = options.query
+      ? "WHERE email LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\'"
+      : '';
+    const likeValue = options.query ? likePattern(options.query) : null;
     const params = options.query ? [likeValue, likeValue, likeValue] : [];
 
     const rows = await sql.all<UserRecord>(
@@ -173,6 +195,8 @@ export function createUserRepo(sql: SqlClient) {
     countAdmins,
     getSuperAdminId,
     getFirstAdminId,
+    search,
+    listRecent,
     count,
     list,
   };

@@ -3,8 +3,15 @@ import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { likePattern, paging } from '../db/sql';
 import type { DocumentRecord, DocumentType, LinkShareMode } from './types';
 
-/** 文档内容在文件存储里的 key；与数据库记录分离，便于直接走 R2/Blob 的大对象能力 */
+/**
+ * 文档内容在文件存储里的 key；与数据库记录分离，便于直接走 R2/Blob 的大对象能力。
+ * 新建文档仍用 `<id>.json`，之后每次保存写入一个**唯一**的 pending key，
+ * 版本号由 SQL 的条件更新决定——写失败/版本冲突时不会覆盖任何已有内容。
+ */
 export const documentContentKey = (id: string) => `documents/${id}.json`;
+
+/** 待提交的内容 key：唯一、不可猜测，提交成功后才由数据库指向它 */
+export const pendingContentKey = (id: string) => `documents/${id}/p-${randomToken(8)}.json`;
 
 export function createDocumentRepo(sql: SqlClient) {
   const getById = (id: string) =>
@@ -77,8 +84,8 @@ export function createDocumentRepo(sql: SqlClient) {
     const conditions = ['team_id = ?', options.trashed ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL'];
     const params: unknown[] = [teamId];
     if (options.query) {
-      conditions.push('title LIKE ?');
-      params.push(`%${options.query}%`);
+      conditions.push("title LIKE ? ESCAPE '\\'");
+      params.push(likePattern(options.query));
     }
     const where = conditions.join(' AND ');
     const totalRow = await sql.first<{ n: number }>(
@@ -98,28 +105,53 @@ export function createDocumentRepo(sql: SqlClient) {
     };
   };
 
-  /** 保存内容：乐观锁，baseVersion 不匹配时返回 conflict=true 且不写入 */
-  const saveContent = async (
+  /**
+   * 提交内容：乐观锁 + 条件更新（CAS）。
+   *
+   * 调用顺序必须是「先上传到 pendingKey → 再调用本方法」：
+   * - 版本不匹配时**不会**产生任何写入（旧实现是先写文件再判版本，409 时内容已被覆盖）
+   * - UPDATE 带 `version = ?` 条件，并发提交只有一个能 `changes > 0`
+   * - `content_key` 与版本号在同一条 UPDATE 里切换，不存在「库里指新 key、文件还没写」的窗口
+   */
+  const commitContent = async (
     id: string,
-    input: { sizeBytes: number; title?: string; baseVersion?: number; editedBy: string | null }
-  ): Promise<{ conflict: boolean; document: DocumentRecord | null }> => {
+    input: {
+      sizeBytes: number;
+      title?: string;
+      baseVersion?: number;
+      editedBy: string | null;
+      pendingKey: string;
+    }
+  ): Promise<{ status: 'ok' | 'conflict' | 'missing'; document: DocumentRecord | null }> => {
     const current = await getActive(id);
-    if (!current) return { conflict: false, document: null };
+    if (!current) return { status: 'missing', document: null };
     if (
       typeof input.baseVersion === 'number' &&
       Number.isFinite(input.baseVersion) &&
       input.baseVersion !== current.version
     ) {
-      return { conflict: true, document: current };
+      return { status: 'conflict', document: current };
     }
     const now = new Date().toISOString();
-    await sql.run(
-      `UPDATE documents SET size_bytes = ?, version = version + 1, title = ?, last_edited_by = ?, updated_at = ?
-       WHERE id = ? AND version = ?`,
-      [input.sizeBytes, input.title?.trim() || current.title, input.editedBy, now, id, current.version]
+    const result = await sql.run(
+      `UPDATE documents
+         SET size_bytes = ?, version = version + 1, content_key = ?, title = ?,
+             last_edited_by = ?, updated_at = ?
+       WHERE id = ? AND version = ? AND deleted_at IS NULL`,
+      [
+        input.sizeBytes,
+        input.pendingKey,
+        input.title?.trim() || current.title,
+        input.editedBy,
+        now,
+        id,
+        current.version,
+      ]
     );
-    const updated = await getById(id);
-    return { conflict: false, document: updated };
+    if (result.changes === 0) {
+      return { status: 'conflict', document: await getActive(id) };
+    }
+    return { status: 'ok', document: await getById(id) };
   };
 
   const rename = async (id: string, title: string): Promise<DocumentRecord | null> => {
@@ -247,7 +279,7 @@ export function createDocumentRepo(sql: SqlClient) {
       }
     }
     if (options.query) {
-      conditions.push('title LIKE ?');
+      conditions.push("title LIKE ? ESCAPE '\\'");
       params.push(likePattern(options.query));
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
@@ -345,7 +377,7 @@ export function createDocumentRepo(sql: SqlClient) {
       params.push(options.type);
     }
     if (options.query) {
-      conditions.push('(title LIKE ? OR id LIKE ?)');
+      conditions.push("(title LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')");
       params.push(likePattern(options.query), likePattern(options.query));
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -392,7 +424,7 @@ export function createDocumentRepo(sql: SqlClient) {
     getById,
     getActive,
     create,
-    saveContent,
+    commitContent,
     rename,
     softDelete,
     restore,

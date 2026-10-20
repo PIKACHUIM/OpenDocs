@@ -108,8 +108,10 @@ export interface TeamRecord {
   max_file_bytes: number;
   /** 1 = 只读：只有团队管理员可新建/修改/删除 */
   readonly: number;
-  /** 唯一邀请令牌，相当于加入口令 */
+  /** 历史遗留：早期明文令牌；新数据只写 invite_token_hash */
   invite_token: string | null;
+  /** 邀请令牌的 SHA-256，明文只在生成时返回一次 */
+  invite_token_hash: string | null;
   default_can_create: number;
   default_can_update: number;
   default_can_delete: number;
@@ -148,7 +150,8 @@ export interface PublicTeam {
   maxImageBytes: number;
   maxFileBytes: number;
   readonly: boolean;
-  inviteToken: string | null;
+  /** 是否已生成邀请令牌；令牌本身只在生成/重置时返回一次，不再随列表下发 */
+  inviteEnabled: boolean;
   defaultCanCreate: boolean;
   defaultCanUpdate: boolean;
   defaultCanDelete: boolean;
@@ -173,7 +176,7 @@ export function toPublicTeam(record: TeamRecord): PublicTeam {
     maxImageBytes: record.max_image_bytes,
     maxFileBytes: record.max_file_bytes,
     readonly: !!record.readonly,
-    inviteToken: record.invite_token,
+    inviteEnabled: !!(record.invite_token_hash || record.invite_token),
     defaultCanCreate: !!record.default_can_create,
     defaultCanUpdate: !!record.default_can_update,
     defaultCanDelete: !!record.default_can_delete,
@@ -355,11 +358,17 @@ export interface PublicDocument {
   lastOpenedAt: string | null;
   /** 当前访问者相对于该文档的身份 */
   myRole?: 'owner' | DocumentMemberRole;
+  /** 列表里直接展示「编辑 / 删除」两列勾选，避免前端再推导 */
+  permissions?: PermissionSet;
 }
 
 export function toPublicDocument(
   doc: DocumentRecord,
-  options?: { ownerName?: string | null; myRole?: 'owner' | DocumentMemberRole }
+  options?: {
+    ownerName?: string | null;
+    myRole?: 'owner' | DocumentMemberRole;
+    permissions?: PermissionSet;
+  }
 ): PublicDocument {
   return {
     id: doc.id,
@@ -379,6 +388,7 @@ export function toPublicDocument(
     starred: !!doc.starred,
     lastOpenedAt: doc.last_opened_at ?? null,
     myRole: options?.myRole,
+    permissions: options?.permissions,
   };
 }
 

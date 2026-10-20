@@ -99,18 +99,32 @@ export function createAssetRepo(sql: SqlClient) {
     return row?.n ?? 0;
   };
 
+  const sumSizeByDocument = async (documentId: string): Promise<number> => {
+    const row = await sql.first<{ n: number }>(
+      'SELECT SUM(size_bytes) AS n FROM assets WHERE document_id = ?',
+      [documentId]
+    );
+    return row?.n ?? 0;
+  };
+
+  /** 删号时用：该用户上传过的全部素材（含未绑定文档的） */
+  const listAllByOwner = (ownerId: string) =>
+    sql.all<AssetRecord>('SELECT * FROM assets WHERE owner_id = ?', [ownerId]);
+
   return {
     create,
     getById,
     remove,
     listByDocument,
     listByOwner,
+    listAllByOwner,
     countByOwner,
     listAll,
     countAll,
     listUnreferenced,
     sumAllSize,
     sumSizeByOwner,
+    sumSizeByDocument,
   };
 }
 

@@ -1012,6 +1012,22 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   line-height: 2;
 }
 
+// 列表「权限」列：√ 编辑 √ 删除
+.permissionCell {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.permissionOn {
+  color: #0f7b45;
+}
+
+.permissionOff {
+  color: $faint;
+}
+
 .listSize {
   min-width: 56px;
   text-align: right;

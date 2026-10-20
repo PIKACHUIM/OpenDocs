@@ -24,6 +24,9 @@ const REQUIRED_FIELD: Record<DocumentType, string> = {
   image: 'layouts',
 };
 
+/** 这些键一旦原样落库，前端做对象合并时可能造成原型污染 */
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function normalizeDocumentContent(
   type: DocumentType,
   value: unknown
@@ -36,8 +39,15 @@ export function normalizeDocumentContent(
   if (!(field in candidate)) {
     throw badRequest(`文档内容缺少字段 ${field}`);
   }
+  // 逐键拷贝而不是 `{...candidate}`：`__proto__` 在 JSON.parse 后是自有属性，
+  // 展开会被原样带进落库对象，这里直接丢弃危险键。
+  const clean: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(candidate)) {
+    if (FORBIDDEN_KEYS.has(key)) continue;
+    clean[key] = item;
+  }
   return {
-    ...candidate,
+    ...clean,
     type,
     version: typeof candidate.version === 'number' ? candidate.version : 1,
   } as DocumentContentEnvelope;
