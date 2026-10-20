@@ -144,7 +144,9 @@ export const SCHEMA_STATEMENTS: string[] = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite ON teams (invite_token)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite_hash ON teams (invite_token_hash)`,
+  // 注意：invite_token_hash 的索引不能放在这里——老库的 teams 表还没有该列，
+  // D1 的 batch 是原子的，一条失败会让整个建表批次回滚，导致所有接口 500。
+  // 它必须放在 COLUMN_PATCHES 里、等 ALTER 加完列之后再建。
 
   `CREATE TABLE IF NOT EXISTS team_members (
     team_id TEXT NOT NULL,
@@ -199,12 +201,56 @@ export function ensureSchema(sql: SqlClient): Promise<void> {
   let pending = ready.get(sql.id);
   if (!pending) {
     pending = (async () => {
-      await sql.batch(SCHEMA_STATEMENTS.map((statement) => ({ sql: statement })));
+      // 索引依赖后补的列（folder_id / starred / team_id），统一放到补列之后再建
+      const isIndex = (statement: string) => /CREATE\s+(UNIQUE\s+)?INDEX/i.test(statement);
+
+      try {
+        // 正常路径：一次 batch 建完（快、原子）
+        await sql.batch(
+          SCHEMA_STATEMENTS.filter((statement) => !isIndex(statement)).map((statement) => ({
+            sql: statement,
+          }))
+        );
+      } catch (error) {
+        // 老库上任何一条语句失败都会让整批回滚（D1 batch 是原子的），
+        // 退化成逐条执行：已存在的对象报错忽略，真正的错误才往上抛。
+        // 这样一次 DDL 疏忽不会把整个站点打成 500。
+        console.error('[schema] 批量建表失败，改为逐条执行:', error);
+        for (const statement of SCHEMA_STATEMENTS.filter((item) => !isIndex(item))) {
+          try {
+            await sql.run(statement);
+          } catch (inner) {
+            console.warn('[schema] 语句跳过:', statement.slice(0, 80), inner instanceof Error ? inner.message : inner);
+          }
+        }
+      }
       for (const patch of COLUMN_PATCHES) {
         try {
           await sql.run(patch);
-        } catch {
-          // 列已存在（新库走 CREATE TABLE 时就已经有了），忽略
+        } catch (error) {
+          // 列/索引已存在（新库走 CREATE TABLE 时就已经有了）属正常；
+          // 其它错误必须打出来，否则加列失败会以「令牌哈希列不存在」这种
+          // 间接形式在业务层爆掉，很难定位。
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/duplicate column|already exists/i.test(message)) {
+            console.error('[schema] 迁移语句失败:', patch, message);
+          }
+        }
+      }
+
+      // 补列完成后再建一次索引：老库上索引依赖 folder_id / starred / team_id 等
+      // 后加的列，首轮一定失败，这里重试一次才算真正建成。
+      const indexes = SCHEMA_STATEMENTS.filter((statement) =>
+        /CREATE\s+(UNIQUE\s+)?INDEX/i.test(statement)
+      );
+      for (const index of indexes) {
+        try {
+          await sql.run(index);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/already exists/i.test(message)) {
+            console.error('[schema] 索引创建失败:', index.slice(0, 80), message);
+          }
         }
       }
     })().catch((error) => {
