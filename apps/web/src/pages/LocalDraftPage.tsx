@@ -44,6 +44,36 @@ const TYPE_TITLE: Record<TryType, string> = {
 const SAVE_DEBOUNCE_MS = 600;
 
 /**
+ * 草稿是否已有实际内容。
+ * 用于「离开前提醒」——空文档不必打扰用户，有内容才拦截。
+ */
+function draftHasContent(type: TryType, content: DocumentContent): boolean {
+  switch (type) {
+    case 'markdown':
+      return ((content as MarkdownContent).markdown ?? '').trim().length > 0;
+    case 'mindmap':
+      return ((content as MindmapContent).elements ?? []).length > 0;
+    case 'excel': {
+      const excel = content as ExcelContent;
+      if (excel.univer) return true;
+      return (excel.sheets ?? []).some((sheet) => (sheet.celldata ?? []).length > 0);
+    }
+    case 'ppt': {
+      const ppt = content as PptContent;
+      return (ppt.slides ?? []).some((slide) => (slide.elements ?? []).length > 0);
+    }
+    case 'word': {
+      const word = content as WordContent;
+      if (word.univer) return true;
+      const nodes = (word.doc as { content?: unknown[] } | undefined)?.content ?? [];
+      return nodes.length > 1;
+    }
+    default:
+      return false;
+  }
+}
+
+/**
  * 免登录试用页。
  *
  * 与云端文档页的区别只有一个：数据落在浏览器本地（localforage），
@@ -60,6 +90,38 @@ export function LocalDraftPage({ type }: { type: TryType }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const storageKey = `draft:${type}`;
+
+  const hasContent = useMemo(
+    () => (content ? draftHasContent(type, content) : false),
+    [content, type]
+  );
+
+  // 关闭标签页 / 刷新时提醒：内容只在本地，误关就找不回来了
+  useEffect(() => {
+    if (!hasContent) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasContent]);
+
+  /**
+   * 返回：回首页而不是丢给登录页。
+   * 有内容时先确认，避免误触把正在编辑的草稿丢掉。
+   */
+  const handleBack = useCallback(() => {
+    if (
+      hasContent &&
+      !window.confirm(
+        '当前内容只保存在这台设备上，离开后仍可回来继续编辑。\n\n确定要离开吗？'
+      )
+    ) {
+      return;
+    }
+    navigate('/');
+  }, [hasContent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,6 +289,7 @@ export function LocalDraftPage({ type }: { type: TryType }) {
       canWrite
       syncStatus={status}
       onRename={handleRename}
+      onBack={handleBack}
       toolbar={
         <div className={styles.row}>
           <span className={`${styles.tag} ${styles.tagMuted}`}>免登录 · 仅存本地</span>

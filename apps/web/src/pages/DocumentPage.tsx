@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import type { DocumentContent, ExcelContent, MarkdownContent, MindmapContent, PptContent, WordContent } from '../api';
 import { DocumentShell } from '../editors/DocumentShell';
 import { useDocumentSession } from '../lib/document-session';
@@ -25,6 +25,25 @@ interface DocumentPageProps {
 export function DocumentPage({ kind, id }: DocumentPageProps) {
   const session = useDocumentSession(kind, id);
   const [exporting, setExporting] = useState(false);
+
+  // 有未同步的改动时，关闭标签页/刷新前提醒一次
+  const unsaved =
+    session.syncStatus.status === 'dirty' || session.syncStatus.status === 'saving';
+
+  useEffect(() => {
+    if (!unsaved) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [unsaved]);
+
+  const handleBack = useCallback(() => {
+    if (unsaved && !window.confirm('还有改动没有保存到云端，确定离开吗？')) return;
+    navigate(kind === 'share' ? '/' : '/documents');
+  }, [unsaved, kind]);
 
   const editorContext = useMemo(
     () => ({
@@ -152,6 +171,7 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
       canWrite={canWrite}
       syncStatus={session.syncStatus}
       onRename={kind === 'document' ? session.renameNow : undefined}
+      onBack={handleBack}
       toolbar={
         <Dropdown trigger={<span className={styles.button}>{exporting ? '导出中…' : '导出'}</span>} align="left">
           {exportItems.map((item) => (

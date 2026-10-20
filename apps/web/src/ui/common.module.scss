@@ -1362,15 +1362,26 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   padding: 16px 32px 72px;
 }
 
+// 首页入口：固定一行 3 个，窄屏降为 2 个 / 1 个
 .entryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+
+  @media (max-width: 980px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .entryCard {
   @include card;
-  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 18px;
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1407,12 +1418,75 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   color: $muted;
 }
 
+// 卡片内的能力要点
+.entryPoints {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 16px;
+  padding: 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    padding-left: 14px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: $text-secondary;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: $primary;
+      opacity: 0.45;
+    }
+  }
+}
+
+.entryAction {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: $primary;
+  opacity: 0.9;
+}
+
 .landingFooter {
+  display: grid;
+  gap: 5px;
+  justify-items: center;
   border-top: 1px solid $border;
-  padding: 20px 32px;
+  padding: 22px 32px 26px;
   font-size: 12px;
   color: $faint;
   text-align: center;
+}
+
+.footerBrand {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: $text;
+}
+
+.footerLine {
+  font-size: 12px;
+  line-height: 1.7;
+  color: $faint;
+}
+
+.footerLink {
+  color: $text-secondary;
+  text-decoration: none;
+
+  &:hover {
+    color: $primary;
+    text-decoration: underline;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -24,6 +24,11 @@ interface DocumentShellProps {
   onRename?: (title: string) => Promise<void>;
   /** 每种编辑器自己的工具栏/导出按钮，渲染在标题右侧 */
   toolbar?: ReactNode;
+  /**
+   * 返回按钮的行为。默认回文档管理；
+   * 试用页会传入「返回首页 + 未保存确认」，避免把未登录用户甩到登录页。
+   */
+  onBack?: () => void;
   children: ReactNode;
 }
 
@@ -34,6 +39,7 @@ export function DocumentShell({
   syncStatus,
   onRename,
   toolbar,
+  onBack,
   children,
 }: DocumentShellProps) {
   const [title, setTitle] = useState(document?.title ?? '');
@@ -89,7 +95,7 @@ export function DocumentShell({
         <button
           type="button"
           className={`${styles.button} ${styles.buttonGhost}`}
-          onClick={() => navigate('/documents')}
+          onClick={() => (onBack ? onBack() : navigate('/documents'))}
         >
           ← 返回
         </button>

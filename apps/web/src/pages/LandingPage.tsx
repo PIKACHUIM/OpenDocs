@@ -9,6 +9,8 @@ interface Entry {
   type: DocumentType | 'image';
   title: string;
   desc: string;
+  /** 卡片上的能力要点，3 条以内 */
+  points: string[];
   badge: string;
   fg: string;
   bg: string;
@@ -18,7 +20,8 @@ const ENTRIES: Entry[] = [
   {
     type: 'mindmap',
     title: '在线白板',
-    desc: '无限画布，把想法随手铺开再慢慢收敛',
+    desc: '无限画布，先把想法随手铺开，再慢慢收敛成结构。',
+    points: ['无限画布与自由缩放', '思维导图、流程图、手绘标注', '自动保存到本地或云端'],
     badge: '板',
     fg: '#3370ff',
     bg: '#eef3ff',
@@ -26,7 +29,8 @@ const ENTRIES: Entry[] = [
   {
     type: 'word',
     title: 'Word 文档',
-    desc: '标题、列表、表格、图片，排版接近 Word',
+    desc: '接近桌面 Word 的排版体验，适合正式文档与长文写作。',
+    points: ['标题、列表、表格、图片', '字体字号与段落格式', '导出 .docx 与 PDF'],
     badge: 'W',
     fg: '#1a56c4',
     bg: '#eaf1fe',
@@ -34,7 +38,8 @@ const ENTRIES: Entry[] = [
   {
     type: 'excel',
     title: 'Excel 表格',
-    desc: '公式、数字格式与多工作表',
+    desc: '内置公式引擎，日常统计与数据处理够用。',
+    points: ['完整公式与数字格式', '多工作表与筛选', '导出 .xlsx'],
     badge: 'X',
     fg: '#0f7b45',
     bg: '#e9f7ef',
@@ -42,7 +47,8 @@ const ENTRIES: Entry[] = [
   {
     type: 'ppt',
     title: '演示文稿',
-    desc: '自由画布排版幻灯片，可放映与导出 pptx',
+    desc: '自由画布排版幻灯片，元素可以随意摆放与对齐。',
+    points: ['文字、形状、图表、公式、音视频', '进入动画与页面切换', '全屏放映与 .pptx 导出'],
     badge: 'P',
     fg: '#c2500f',
     bg: '#fdf0e8',
@@ -50,7 +56,8 @@ const ENTRIES: Entry[] = [
   {
     type: 'markdown',
     title: 'Markdown',
-    desc: '源码编辑与实时预览，适合技术文档',
+    desc: '源码与实时预览并排，写技术文档最顺手。',
+    points: ['格式工具栏一键排版', '可嵌入可编辑的思维导图', '拖入图片自动上传'],
     badge: 'MD',
     fg: '#6f4bd8',
     bg: '#f3efff',
@@ -58,12 +65,16 @@ const ENTRIES: Entry[] = [
   {
     type: 'image',
     title: '图片编辑',
-    desc: '模板、图层、对齐与 PNG 导出',
+    desc: '做封面、海报、配图，图层化编辑所见即所得。',
+    points: ['文字、形状、图片、二维码、画笔', '图层管理与对齐分布', '导出 PNG / JPG'],
     badge: '图',
     fg: '#b5487a',
     bg: '#fdeff5',
   },
 ];
+
+/** 项目地址：如果仓库迁移，改这里一处即可 */
+const PROJECT_URL = 'https://github.com/PIKACHUIM/drawnix';
 
 /**
  * 门户首页：介绍 + 各编辑器入口。
@@ -142,18 +153,53 @@ export function LandingPage() {
               </span>
               <div className={styles.entryTitle}>{entry.title}</div>
               <div className={styles.entryDesc}>{entry.desc}</div>
+              <ul className={styles.entryPoints}>
+                {entry.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+              <span className={styles.entryAction}>开始使用 →</span>
             </button>
           ))}
         </div>
       </section>
 
       <footer className={styles.landingFooter}>
-        <div>免登录试用模式下，内容只保存在当前浏览器；登录后才会同步到云端。</div>
-        <div style={{ marginTop: 6 }}>
-          本站基于 AGPL-3.0 开源软件 OpenDocs 运行，使用者有权获取对应源码 ·{' '}
-          <a href="/LICENSE.txt" target="_blank" rel="noopener noreferrer">
+        <div className={styles.footerBrand}>Open Docs</div>
+        <div className={styles.footerLine}>
+          © {new Date().getFullYear()} Open Docs，保留一切权利。
+        </div>
+        <div className={styles.footerLine}>
+          基于{' '}
+          <a
+            className={styles.footerLink}
+            href="https://www.gnu.org/licenses/agpl-3.0.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            AGPL-3.0
+          </a>{' '}
+          许可发布 ·{' '}
+          <a
+            className={styles.footerLink}
+            href="/LICENSE.txt"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             许可证全文
+          </a>{' '}
+          ·{' '}
+          <a
+            className={styles.footerLink}
+            href={PROJECT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            项目地址
           </a>
+        </div>
+        <div className={styles.footerLine}>
+          免登录试用模式下，内容只保存在当前浏览器；登录后才会同步到云端。
         </div>
       </footer>
     </div>
