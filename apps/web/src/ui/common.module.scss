@@ -1012,6 +1012,13 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   line-height: 2;
 }
 
+.listSize {
+  min-width: 56px;
+  text-align: right;
+  font-size: 12px;
+  color: $muted;
+}
+
 .listWrap {
   @include card;
   overflow: hidden;

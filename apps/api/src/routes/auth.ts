@@ -143,6 +143,17 @@ authRoutes.post('/register', async (c) => {
     password: await hashPassword(password),
   });
 
+  // 勾选了「新用户自动加入」的团队空间，注册即入队，权限取该空间的默认值
+  const autoJoinTeams = await c.get('repos').teams.listAutoJoin();
+  for (const team of autoJoinTeams) {
+    await c.get('repos').teams.addMember(team.id, user.id, {
+      canCreate: !!team.default_can_create,
+      canUpdate: !!team.default_can_update,
+      canDelete: !!team.default_can_delete,
+      isAdmin: !!team.default_is_admin,
+    });
+  }
+
   let emailSent = false;
   if (!emailVerified) {
     try {

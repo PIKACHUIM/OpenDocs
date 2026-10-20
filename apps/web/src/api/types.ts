@@ -49,6 +49,49 @@ export interface ApiFolder {
   updatedAt: string;
 }
 
+/** 团队空间 */
+export interface TeamPermissions {
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isAdmin: boolean;
+}
+
+export interface ApiTeam {
+  id: string;
+  name: string;
+  createdBy: string;
+  quotaBytes: number;
+  allowImage: boolean;
+  allowFile: boolean;
+  maxImageBytes: number;
+  maxFileBytes: number;
+  readonly: boolean;
+  inviteToken: string | null;
+  defaultCanCreate: boolean;
+  defaultCanUpdate: boolean;
+  defaultCanDelete: boolean;
+  defaultIsAdmin: boolean;
+  autoJoin: boolean;
+  createdAt: string;
+  memberCount?: number;
+  documentCount?: number;
+  usedBytes?: number;
+  /** 当前用户在该空间的权限（用户侧接口返回） */
+  permissions?: TeamPermissions;
+}
+
+export interface ApiTeamMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
 /** 管理端附件 */
 export interface AdminAsset {
   id: string;

@@ -3,8 +3,10 @@ import {
   ApiError,
   documentApi,
   folderApi,
+  teamApi,
   type ApiDocument,
   type ApiFolder,
+  type ApiTeam,
   type DocumentContent,
   type DocumentType,
 } from '../api';
@@ -110,6 +112,9 @@ export function DocumentsPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const [documents, setDocuments] = useState<ApiDocument[]>([]);
+  /** 我加入的团队空间；选中后列表只显示该空间的文档 */
+  const [teams, setTeams] = useState<ApiTeam[]>([]);
+  const [teamId, setTeamId] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
@@ -145,6 +150,19 @@ export function DocumentsPage() {
     }
   }, []);
 
+  const loadTeams = useCallback(async () => {
+    try {
+      const data = await teamApi.list();
+      setTeams(data.teams);
+    } catch {
+      // 团队加载失败不影响个人文档
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTeams();
+  }, [loadTeams]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -159,7 +177,8 @@ export function DocumentsPage() {
       if (scope === 'trash') params.trashed = true;
       if (scope === 'starred') params.starred = true;
       if (scope === 'recent') params.recent = true;
-      if (scope === 'owned' && folderId) params.folderId = folderId;
+      if (scope === 'owned' && folderId && !teamId) params.folderId = folderId;
+    if (teamId) params.teamId = teamId;
 
       const data = await documentApi.list(params);
       setDocuments(data.documents);
@@ -170,7 +189,7 @@ export function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [scope, folderId, page, query]);
+  }, [scope, folderId, page, query, teamId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -430,6 +449,8 @@ export function DocumentsPage() {
         </>
       ) : (
         <>
+          {/* 与右键菜单保持同一组操作，避免两处行为不一致 */}
+          <DropdownItem onClick={() => openDocument(doc)}>打开</DropdownItem>
           <DropdownItem
             onClick={() => {
               setRenameTarget(doc);
@@ -472,6 +493,15 @@ export function DocumentsPage() {
       <span>{locationLabel(doc)}</span>
       <span>{formatTime(doc.lastOpenedAt ?? doc.updatedAt)}</span>
       <span className={styles.listRowActions} onClick={(event) => event.stopPropagation()}>
+        <span className={styles.listSize}>{formatSize(doc.sizeBytes)}</span>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
+          title="在此位置新建文档"
+          onClick={() => setCreateOpen(true)}
+        >
+          +
+        </button>
         {renderRowMenu(doc)}
       </span>
     </div>
@@ -492,6 +522,14 @@ export function DocumentsPage() {
         {formatTime(doc.lastOpenedAt ?? doc.updatedAt)} · {formatSize(doc.sizeBytes)}
       </div>
       <div className={styles.cardMenu} onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
+          title="在此位置新建文档"
+          onClick={() => setCreateOpen(true)}
+        >
+          +
+        </button>
         {renderRowMenu(doc)}
       </div>
     </div>
@@ -566,6 +604,51 @@ export function DocumentsPage() {
               }}
             />
           </label>
+
+          <div className={styles.sidebarSection}>团队空间</div>
+          {teams.length > 0
+            ? teams.map((team) => (
+                <button
+                  key={team.id}
+                  type="button"
+                  className={`${styles.sidebarItem} ${
+                    teamId === team.id ? styles.sidebarItemActive : ''
+                  }`}
+                  title={`${team.name}${team.readonly ? '（只读）' : ''}`}
+                  onClick={() => {
+                    setTeamId(team.id === teamId ? null : team.id);
+                    setFolderId(null);
+                    setScope('owned');
+                    setPage(1);
+                  }}
+                >
+                  <span className={styles.sidebarItemText}>{team.name}</span>
+                  {team.readonly ? <span className={styles.tag}>只读</span> : null}
+                </button>
+              ))
+            : null}
+
+          <button
+            type="button"
+            className={styles.sidebarItem}
+            onClick={async () => {
+              const token = window.prompt('粘贴团队邀请令牌（由管理员生成）');
+              if (!token?.trim()) return;
+              try {
+                const result = await teamApi.join(token.trim());
+                await loadTeams();
+                setTeamId(result.teamId);
+                setScope('owned');
+                setFolderId(null);
+                setPage(1);
+                if (result.already) window.alert('你已经在这个团队里了');
+              } catch (caught) {
+                window.alert(caught instanceof ApiError ? caught.message : '加入失败');
+              }
+            }}
+          >
+            <span className={styles.sidebarItemText}>+ 加入团队</span>
+          </button>
 
           <div className={styles.sidebarSection}>目录</div>
           {renderFolderTree(null, 0)}
@@ -748,7 +831,8 @@ export function DocumentsPage() {
 
       <NewDocumentDialog
         type={newDocType}
-        folderId={scope === 'owned' ? folderId : null}
+        folderId={scope === 'owned' && !teamId ? folderId : null}
+        teamId={teamId}
         onClose={() => setNewDocType(null)}
       />
 

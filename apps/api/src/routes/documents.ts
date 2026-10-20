@@ -45,8 +45,43 @@ async function loadAccessible(c: Context<ApiEnv>, id: string) {
   if (!document) throw notFound('文档不存在或已被删除');
   const user = c.get('user')!;
   const memberRole = await c.get('repos').members.getRole(id, user.id);
-  const access = resolveDocumentAccess({ document, user, memberRole });
+  let access = resolveDocumentAccess({ document, user, memberRole });
+
+  // 团队空间的文档：权限由团队成员表与「只读模式」决定
+  if (document.team_id && user.role !== 'admin') {
+    const member = await c.get('repos').teams.getMember(document.team_id, user.id);
+    const team = await c.get('repos').teams.getById(document.team_id);
+    if (!member) {
+      // 不是成员也不是管理员：只有原所有者能看
+      access = document.owner_id === user.id ? 'owner' : 'none';
+    } else if (member.is_admin) {
+      access = 'owner';
+    } else if (team?.readonly) {
+      // 只读空间：普通成员只能看
+      access = 'viewer';
+    } else {
+      access = member.can_update ? 'editor' : 'viewer';
+    }
+  }
+
   return { document, access };
+}
+
+/** 团队成员的删除权限（只读模式下只有团队管理员能删） */
+async function canDeleteDocument(
+  c: Context<ApiEnv>,
+  document: DocumentRecord
+): Promise<boolean> {
+  const user = c.get('user')!;
+  if (user.role === 'admin') return true;
+  if (!document.team_id) return document.owner_id === user.id;
+  if (document.owner_id === user.id) return true;
+  const team = await c.get('repos').teams.getById(document.team_id);
+  const member = await c.get('repos').teams.getMember(document.team_id, user.id);
+  if (!member) return false;
+  if (member.is_admin) return true;
+  if (team?.readonly) return false;
+  return !!member.can_delete;
 }
 
 documentRoutes.get('/', async (c) => {
@@ -67,6 +102,36 @@ documentRoutes.get('/', async (c) => {
       : folderParam === '' || folderParam === 'root'
         ? null
         : folderParam;
+
+  // 团队空间：返回该空间的文档（团队成员可见）
+  const teamId = c.req.query('teamId');
+  if (teamId) {
+    const team = await c.get('repos').teams.getById(teamId);
+    if (!team) throw notFound('团队空间不存在');
+    const member = await c.get('repos').teams.getMember(team.id, user.id);
+    if (!member && user.role !== 'admin') throw forbidden('不是该团队空间的成员');
+    const result = await c.get('repos').documents.listByTeam(team.id, {
+      page,
+      pageSize,
+      query,
+      trashed,
+    });
+    const myRole = member?.is_admin
+      ? 'owner'
+      : member?.can_update
+        ? 'editor'
+        : 'viewer';
+    return json({
+      documents: result.items.map((item) =>
+        toPublicDocument(item, {
+          myRole: user.role === 'admin' ? 'owner' : (myRole as DocumentMemberRole | 'owner'),
+        })
+      ),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+    });
+  }
 
   if (scope === 'shared') {
     const result = await c.get('repos').documents.listSharedWithMe(user.id, { page, pageSize, query });
@@ -129,6 +194,7 @@ documentRoutes.post('/', async (c) => {
     title?: unknown;
     content?: unknown;
     folderId?: unknown;
+    teamId?: unknown;
   }>(c.req.raw);
   const type = assertType(body.type);
   const title = optionalString(body.title, 120) ?? '未命名文档';
@@ -141,9 +207,34 @@ documentRoutes.post('/', async (c) => {
     folderId = folder.id;
   }
 
+  // 团队空间：必须是成员、有新建权限，且空间未处于只读模式
+  let teamId: string | null = null;
+  if (typeof body.teamId === 'string' && body.teamId.trim()) {
+    const team = await c.get('repos').teams.getById(body.teamId.trim());
+    if (!team) throw badRequest('团队空间不存在');
+    const member = await c.get('repos').teams.getMember(team.id, user.id);
+    if (!member && user.role !== 'admin') throw forbidden('不是该团队空间的成员');
+    if (user.role !== 'admin') {
+      if (team.readonly && !member?.is_admin) throw forbidden('该团队空间已开启只读模式');
+      if (!member?.is_admin && !member?.can_create) throw forbidden('没有在该空间新建文档的权限');
+    }
+    teamId = team.id;
+  }
+
   const content = normalizeDocumentContent(type, body.content ?? emptyContentFor(type));
   const serialized = JSON.stringify(content);
   assertContentSize(serialized);
+
+  // 团队空间容量上限（0 表示不限）
+  if (teamId) {
+    const team = await c.get('repos').teams.getById(teamId);
+    if (team && team.quota_bytes > 0) {
+      const stats = await c.get('repos').teams.stats(team.id);
+      if (stats.usedBytes + serialized.length > team.quota_bytes) {
+        throw badRequest('该团队空间容量已满，请联系管理员扩容');
+      }
+    }
+  }
 
   const document = await c.get('repos').documents.create({
     ownerId: user.id,
@@ -151,6 +242,7 @@ documentRoutes.post('/', async (c) => {
     title,
     sizeBytes: serialized.length,
     folderId,
+    teamId,
   });
   await c.get('runtime').files.put(document.content_key, serialized, 'application/json');
 
@@ -258,7 +350,9 @@ documentRoutes.patch('/:id', async (c) => {
 
 documentRoutes.delete('/:id', async (c) => {
   const { document, access } = await loadAccessible(c, c.req.param('id'));
-  if (access !== 'owner') throw forbidden('只有所有者可以删除该文档');
+  // 团队空间里，拥有删除权限的成员也可以删除（只读模式下只有团队管理员可以）
+  const allowed = access === 'owner' || (access !== 'none' && (await canDeleteDocument(c, document)));
+  if (!allowed) throw forbidden('没有删除该文档的权限');
 
   const permanent = c.req.query('permanent') === 'true';
   if (permanent) {

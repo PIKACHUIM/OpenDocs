@@ -3,6 +3,8 @@ import type { DocumentContent } from './content-types';
 import type {
   AdminAsset,
   AdminInviteCode,
+  ApiTeam,
+  ApiTeamMember,
   AdminSettings,
   AdminStats,
   AdminUser,
@@ -68,6 +70,8 @@ export const documentApi = {
     folderId?: string;
     starred?: boolean;
     recent?: boolean;
+    /** 团队空间 id：只看该空间的文档 */
+    teamId?: string;
   }) =>
     api<{
       documents: ApiDocument[];
@@ -83,6 +87,7 @@ export const documentApi = {
     title?: string;
     content?: DocumentContent;
     folderId?: string | null;
+    teamId?: string | null;
   }) => api<{ document: ApiDocument }>('/documents', { method: 'POST', json }),
 
   /** 重命名 / 移动目录 / 收藏 统一走 PATCH */
@@ -179,6 +184,16 @@ export const assetApi = {
   fetchBlob: (id: string) => apiBlob(`/assets/${id}`),
 };
 
+/** 团队空间（用户侧） */
+export const teamApi = {
+  list: () => api<{ teams: ApiTeam[] }>('/teams'),
+  join: (token: string) =>
+    api<{ ok: boolean; teamId: string; already?: boolean }>('/teams/join', {
+      method: 'POST',
+      json: { token },
+    }),
+};
+
 export const adminApi = {
   stats: () => api<AdminStats>('/admin/stats'),
 
@@ -252,6 +267,37 @@ export const adminApi = {
 
   cleanupAssets: () =>
     api<{ ok: boolean; removed: number }>('/admin/assets/cleanup', { method: 'POST' }),
+
+  teams: () => api<{ teams: ApiTeam[] }>('/admin/teams'),
+
+  createTeam: (json: { name: string } & Partial<ApiTeam>) =>
+    api<{ team: ApiTeam }>('/admin/teams', { method: 'POST', json }),
+
+  updateTeam: (id: string, json: Partial<ApiTeam>) =>
+    api<{ team: ApiTeam }>(`/admin/teams/${id}`, { method: 'PATCH', json }),
+
+  deleteTeam: (id: string) => api<{ ok: boolean }>(`/admin/teams/${id}`, { method: 'DELETE' }),
+
+  rotateTeamInvite: (id: string) =>
+    api<{ ok: boolean; inviteToken: string }>(`/admin/teams/${id}/invite`, { method: 'POST' }),
+
+  clearTeamInvite: (id: string) =>
+    api<{ ok: boolean }>(`/admin/teams/${id}/invite`, { method: 'DELETE' }),
+
+  teamMembers: (id: string) =>
+    api<{ members: ApiTeamMember[] }>(`/admin/teams/${id}/members`),
+
+  addTeamMember: (id: string, email: string) =>
+    api<{ ok: boolean }>(`/admin/teams/${id}/members`, { method: 'POST', json: { email } }),
+
+  updateTeamMember: (
+    id: string,
+    userId: string,
+    json: Partial<Pick<ApiTeamMember, 'canCreate' | 'canUpdate' | 'canDelete' | 'isAdmin'>>
+  ) => api<{ ok: boolean }>(`/admin/teams/${id}/members/${userId}`, { method: 'PATCH', json }),
+
+  removeTeamMember: (id: string, userId: string) =>
+    api<{ ok: boolean }>(`/admin/teams/${id}/members/${userId}`, { method: 'DELETE' }),
 
   invites: () => api<{ invites: AdminInviteCode[] }>('/admin/invites'),
 

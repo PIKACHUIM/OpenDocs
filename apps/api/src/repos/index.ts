@@ -6,6 +6,7 @@ import { createInviteRepo } from './invites';
 import { createMemberRepo } from './members';
 import { createSettingsRepo } from './settings';
 import { createAuthTokenRepo, createSessionRepo } from './sessions';
+import { createTeamRepo } from './teams';
 import { createUserRepo } from './users';
 
 export function createRepositories(sql: SqlClient) {
@@ -19,6 +20,7 @@ export function createRepositories(sql: SqlClient) {
     members: createMemberRepo(sql),
     assets: createAssetRepo(sql),
     settings: createSettingsRepo(sql),
+    teams: createTeamRepo(sql),
   };
 }
 

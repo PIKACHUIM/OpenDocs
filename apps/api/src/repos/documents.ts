@@ -22,6 +22,8 @@ export function createDocumentRepo(sql: SqlClient) {
     sizeBytes?: number;
     /** 归属目录；不传或 null 表示未归档 */
     folderId?: string | null;
+    /** 归属团队空间；不传或 null 表示个人空间 */
+    teamId?: string | null;
   }): Promise<DocumentRecord> => {
     const now = new Date().toISOString();
     const record: DocumentRecord = {
@@ -37,6 +39,7 @@ export function createDocumentRepo(sql: SqlClient) {
       link_token_hash: null,
       last_edited_by: input.ownerId,
       folder_id: input.folderId ?? null,
+      team_id: input.teamId ?? null,
       starred: 0,
       last_opened_at: null,
       created_at: now,
@@ -46,9 +49,9 @@ export function createDocumentRepo(sql: SqlClient) {
     record.content_key = documentContentKey(record.id);
     await sql.run(
       `INSERT INTO documents (id, owner_id, type, title, content_key, size_bytes, version,
-         link_mode, link_token, link_token_hash, last_edited_by, folder_id, starred, last_opened_at,
-         created_at, updated_at, deleted_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, 0, NULL, ?, ?, NULL)`,
+        link_mode, link_token, link_token_hash, last_edited_by, folder_id, team_id, starred, last_opened_at,
+        created_at, updated_at, deleted_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, 0, NULL, ?, ?, NULL)`,
       [
         record.id,
         record.owner_id,
@@ -58,11 +61,41 @@ export function createDocumentRepo(sql: SqlClient) {
         record.size_bytes,
         record.last_edited_by,
         record.folder_id,
+        record.team_id,
         record.created_at,
         record.updated_at,
       ]
     );
     return record;
+  };
+
+  /** 团队空间内的文档列表（团队内所有成员可见） */
+  const listByTeam = async (
+    teamId: string,
+    options: { page: number; pageSize: number; query?: string; trashed?: boolean }
+  ) => {
+    const conditions = ['team_id = ?', options.trashed ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL'];
+    const params: unknown[] = [teamId];
+    if (options.query) {
+      conditions.push('title LIKE ?');
+      params.push(`%${options.query}%`);
+    }
+    const where = conditions.join(' AND ');
+    const totalRow = await sql.first<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM documents WHERE ${where}`,
+      params
+    );
+    const offset = (options.page - 1) * options.pageSize;
+    const items = await sql.all<DocumentRecord>(
+      `SELECT * FROM documents WHERE ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+      [...params, options.pageSize, offset]
+    );
+    return {
+      items,
+      total: totalRow?.n ?? 0,
+      page: options.page,
+      pageSize: options.pageSize,
+    };
   };
 
   /** 保存内容：乐观锁，baseVersion 不匹配时返回 conflict=true 且不写入 */
@@ -112,6 +145,13 @@ export function createDocumentRepo(sql: SqlClient) {
     ]);
 
   const hardDelete = (id: string) => sql.run('DELETE FROM documents WHERE id = ?', [id]);
+
+  /** 团队空间被删除时，把其中文档退回个人空间，避免连带删数据 */
+  const detachTeam = (teamId: string) =>
+    sql.run('UPDATE documents SET team_id = NULL, updated_at = ? WHERE team_id = ?', [
+      new Date().toISOString(),
+      teamId,
+    ]);
 
   /** 移动到目录；folderId 为 null 表示移出到根目录 */
   const setFolder = async (id: string, folderId: string | null): Promise<DocumentRecord | null> => {
@@ -357,6 +397,7 @@ export function createDocumentRepo(sql: SqlClient) {
     softDelete,
     restore,
     hardDelete,
+    detachTeam,
     setFolder,
     setStarred,
     touchOpened,
@@ -365,6 +406,7 @@ export function createDocumentRepo(sql: SqlClient) {
     revokeLinkShare,
     getByLinkToken,
     listOwned,
+    listByTeam,
     listSharedWithMe,
     listSharedByMe,
     listTrashedBefore,

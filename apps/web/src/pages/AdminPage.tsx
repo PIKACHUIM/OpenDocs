@@ -14,8 +14,9 @@ import { navigate } from '../lib/router';
 import { useAuth } from '../lib/auth';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
+import { TeamAdminPanel } from './admin/TeamAdminPanel';
 
-type Tab = 'overview' | 'users' | 'documents' | 'assets' | 'invites' | 'settings';
+type Tab = 'overview' | 'users' | 'documents' | 'teams' | 'assets' | 'invites' | 'settings';
 
 const PAGE_SIZE = 20;
 
@@ -301,6 +302,7 @@ export function AdminPage() {
               ['overview', '概览'],
               ['users', '用户管理'],
               ['documents', '文档管理'],
+              ['teams', '团队空间'],
               ['assets', '附件管理'],
               ['invites', '邀请码'],
               ['settings', '系统设置'],
@@ -591,6 +593,8 @@ export function AdminPage() {
             ) : null}
           </>
         ) : null}
+
+        {tab === 'teams' ? <TeamAdminPanel /> : null}
 
         {tab === 'assets' ? (
           <div>

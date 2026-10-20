@@ -117,6 +117,17 @@ export function createUserRepo(sql: SqlClient) {
     return row?.n ?? 0;
   };
 
+  /**
+   * 最早创建的管理员（ID 最小）。
+   * 规则要求它不能被取消管理员，避免所有人一起降级导致后台无人可管。
+   */
+  const getFirstAdminId = async (): Promise<string | null> => {
+    const row = await sql.first<{ id: string }>(
+      "SELECT id FROM users WHERE role = 'admin' ORDER BY rowid ASC LIMIT 1"
+    );
+    return row?.id ?? null;
+  };
+
   const count = async (): Promise<number> => {
     const row = await sql.first<{ n: number }>('SELECT COUNT(*) AS n FROM users');
     return row?.n ?? 0;
@@ -139,7 +150,17 @@ export function createUserRepo(sql: SqlClient) {
     return { items: rows, total: totalRow?.n ?? 0 };
   };
 
-  return { getById, getByEmail, create, update, remove, countAdmins, count, list };
+  return {
+    getById,
+    getByEmail,
+    create,
+    update,
+    remove,
+    countAdmins,
+    getFirstAdminId,
+    count,
+    list,
+  };
 }
 
 export type UserRepo = ReturnType<typeof createUserRepo>;

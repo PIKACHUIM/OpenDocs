@@ -1,11 +1,19 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { ApiEnv } from '../context';
-import { hashPassword, type PasswordHash } from '../lib/crypto';
+import { hashPassword, randomId, type PasswordHash } from '../lib/crypto';
 import { getText } from '../files';
-import { badRequest, conflict, json, notFound, readJson, requireString } from '../lib/http';
+import {
+  badRequest,
+  conflict,
+  json,
+  notFound,
+  readJson,
+  requireEmail,
+  requireString,
+} from '../lib/http';
 import { requireAdmin } from '../middleware';
-import { toPublicInviteCode } from '../repos/types';
+import { toPublicInviteCode, toPublicTeam, toPublicTeamMember } from '../repos/types';
 import { paging } from '../db/sql';
 import { SETTINGS_KEYS } from '../services/settings';
 import { emptyContentFor } from '../lib/document-content';
@@ -79,8 +87,13 @@ adminRoutes.patch('/users/:id', async (c) => {
   }
   if (body.role !== undefined) {
     if (body.role !== 'user' && body.role !== 'admin') throw badRequest('role 只能是 user 或 admin');
-    if (body.role !== 'admin' && target.role === 'admin' && (await countActiveAdmins(c)) <= 1) {
-      throw conflict('至少需要保留一个管理员');
+    if (body.role !== 'admin' && target.role === 'admin') {
+      // 管理员不能把自己降级：降完就再也进不来了
+      if (target.id === actor.id) throw conflict('不能取消自己的管理员权限，请让其他管理员操作');
+      // 最早创建的管理员是「根管理员」，保留它保证后台始终有人可管
+      const firstAdminId = await c.get('repos').users.getFirstAdminId();
+      if (target.id === firstAdminId) throw conflict('首个管理员不能被取消管理员权限');
+      if ((await countActiveAdmins(c)) <= 1) throw conflict('至少需要保留一个管理员');
     }
     patch.role = body.role;
   }
@@ -112,8 +125,10 @@ adminRoutes.delete('/users/:id', async (c) => {
   if (!target) throw notFound('用户不存在');
   const actor = c.get('user')!;
   if (target.id === actor.id) throw conflict('不能删除当前登录的账号');
-  if (target.role === 'admin' && (await countActiveAdmins(c)) <= 1) {
-    throw conflict('至少需要保留一个管理员');
+  if (target.role === 'admin') {
+    const firstAdminId = await c.get('repos').users.getFirstAdminId();
+    if (target.id === firstAdminId) throw conflict('首个管理员不能被删除');
+    if ((await countActiveAdmins(c)) <= 1) throw conflict('至少需要保留一个管理员');
   }
 
   const owned = await c.get('repos').documents.listAll({
@@ -326,6 +341,149 @@ adminRoutes.post('/assets/cleanup', async (c) => {
     await c.get('repos').assets.remove(asset.id);
   }
   return json({ ok: true, removed: rows.length });
+});
+
+// ---------------------------------------------------------------------------
+// 团队空间
+// ---------------------------------------------------------------------------
+
+/** 解析团队设置里的布尔/数字字段，避免把字符串写进 INTEGER 列 */
+function teamPatchFrom(body: Record<string, unknown>) {
+  const bool = (value: unknown) => (typeof value === 'boolean' ? value : undefined);
+  const num = (value: unknown) => {
+    if (value === undefined) return undefined;
+    const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+  };
+  return {
+    name: typeof body.name === 'string' ? body.name.trim().slice(0, 60) : undefined,
+    quotaBytes: num(body.quotaBytes),
+    allowImage: bool(body.allowImage),
+    allowFile: bool(body.allowFile),
+    maxImageBytes: num(body.maxImageBytes),
+    maxFileBytes: num(body.maxFileBytes),
+    readonly: bool(body.readonly),
+    defaultCanCreate: bool(body.defaultCanCreate),
+    defaultCanUpdate: bool(body.defaultCanUpdate),
+    defaultCanDelete: bool(body.defaultCanDelete),
+    defaultIsAdmin: bool(body.defaultIsAdmin),
+    autoJoin: bool(body.autoJoin),
+  };
+}
+
+adminRoutes.get('/teams', async (c) => {
+  const teams = await c.get('repos').teams.listAll();
+  const items = await Promise.all(
+    teams.map(async (team) => ({
+      ...toPublicTeam(team),
+      ...(await c.get('repos').teams.stats(team.id)),
+    }))
+  );
+  return json({ teams: items });
+});
+
+adminRoutes.post('/teams', async (c) => {
+  const body = await readJson<Record<string, unknown>>(c.req.raw);
+  const name = requireString(body.name, 'name', { min: 1, max: 60 });
+  const team = await c.get('repos').teams.create({
+    ...teamPatchFrom(body),
+    name,
+    createdBy: c.get('user')!.id,
+  });
+  return json({ team: { ...toPublicTeam(team), ...(await c.get('repos').teams.stats(team.id)) } }, 201);
+});
+
+adminRoutes.patch('/teams/:id', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  const body = await readJson<Record<string, unknown>>(c.req.raw);
+  const updated = await c.get('repos').teams.update(team.id, teamPatchFrom(body));
+  return json({ team: { ...toPublicTeam(updated!), ...(await c.get('repos').teams.stats(team.id)) } });
+});
+
+adminRoutes.delete('/teams/:id', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) return json({ ok: true });
+  // 空间内文档不删除，转为个人文档，避免误删数据
+  await c.get('repos').documents.detachTeam(team.id);
+  await c.get('repos').teams.remove(team.id);
+  return json({ ok: true });
+});
+
+/** 生成/重置邀请令牌（同一个空间同时只有一个） */
+adminRoutes.post('/teams/:id/invite', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  const token = randomId('ti', 12);
+  await c.get('repos').teams.setInviteToken(team.id, token);
+  return json({ ok: true, inviteToken: token });
+});
+
+adminRoutes.delete('/teams/:id/invite', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  await c.get('repos').teams.setInviteToken(team.id, null);
+  return json({ ok: true });
+});
+
+adminRoutes.get('/teams/:id/members', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  const rows = await c.get('repos').teams.listMembers(team.id);
+  return json({
+    members: rows.map((row) =>
+      toPublicTeamMember(row, { email: row.email, display_name: row.display_name })
+    ),
+  });
+});
+
+/** 按邮箱添加成员；已是成员则更新权限 */
+adminRoutes.post('/teams/:id/members', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  const body = await readJson<{ email?: unknown; userId?: unknown }>(c.req.raw);
+
+  const user =
+    typeof body.userId === 'string'
+      ? await c.get('repos').users.getById(body.userId)
+      : typeof body.email === 'string'
+        ? await c.get('repos').users.getByEmail(requireEmail(body.email))
+        : null;
+  if (!user) throw notFound('用户不存在');
+
+  await c.get('repos').teams.addMember(team.id, user.id, {
+    canCreate: !!team.default_can_create,
+    canUpdate: !!team.default_can_update,
+    canDelete: !!team.default_can_delete,
+    isAdmin: !!team.default_is_admin,
+  });
+  return json({ ok: true });
+});
+
+adminRoutes.patch('/teams/:id/members/:userId', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  const member = await c.get('repos').teams.getMember(team.id, c.req.param('userId'));
+  if (!member) throw notFound('该用户不在团队内');
+
+  const body = await readJson<Record<string, unknown>>(c.req.raw);
+  const pick = (value: unknown, fallback: number) =>
+    typeof value === 'boolean' ? (value ? 1 : 0) : fallback;
+
+  await c.get('repos').teams.addMember(team.id, member.user_id, {
+    canCreate: !!pick(body.canCreate, member.can_create),
+    canUpdate: !!pick(body.canUpdate, member.can_update),
+    canDelete: !!pick(body.canDelete, member.can_delete),
+    isAdmin: !!pick(body.isAdmin, member.is_admin),
+  });
+  return json({ ok: true });
+});
+
+adminRoutes.delete('/teams/:id/members/:userId', async (c) => {
+  const team = await c.get('repos').teams.getById(c.req.param('id'));
+  if (!team) throw notFound('团队空间不存在');
+  await c.get('repos').teams.removeMember(team.id, c.req.param('userId'));
+  return json({ ok: true });
 });
 
 adminRoutes.get('/invites', async (c) => {

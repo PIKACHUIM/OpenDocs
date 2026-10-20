@@ -87,11 +87,127 @@ export interface DocumentRecord {
   last_edited_by: string | null;
   /** 所属目录；null 表示未归档（根目录） */
   folder_id: string | null;
+  /** 所属团队空间；null 表示个人空间 */
+  team_id: string | null;
   starred: number;
   last_opened_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+/** 团队空间 */
+export interface TeamRecord {
+  id: string;
+  name: string;
+  created_by: string;
+  quota_bytes: number;
+  allow_image: number;
+  allow_file: number;
+  max_image_bytes: number;
+  max_file_bytes: number;
+  /** 1 = 只读：只有团队管理员可新建/修改/删除 */
+  readonly: number;
+  /** 唯一邀请令牌，相当于加入口令 */
+  invite_token: string | null;
+  default_can_create: number;
+  default_can_update: number;
+  default_can_delete: number;
+  default_is_admin: number;
+  /** 1 = 新用户注册后自动加入 */
+  auto_join: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 团队成员 */
+export interface TeamMemberRecord {
+  team_id: string;
+  user_id: string;
+  can_create: number;
+  can_update: number;
+  can_delete: number;
+  is_admin: number;
+  created_at: string;
+}
+
+export interface TeamPermissions {
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isAdmin: boolean;
+}
+
+export interface PublicTeam {
+  id: string;
+  name: string;
+  createdBy: string;
+  quotaBytes: number;
+  allowImage: boolean;
+  allowFile: boolean;
+  maxImageBytes: number;
+  maxFileBytes: number;
+  readonly: boolean;
+  inviteToken: string | null;
+  defaultCanCreate: boolean;
+  defaultCanUpdate: boolean;
+  defaultCanDelete: boolean;
+  defaultIsAdmin: boolean;
+  autoJoin: boolean;
+  createdAt: string;
+  memberCount?: number;
+  documentCount?: number;
+  usedBytes?: number;
+  /** 当前用户在该空间里的权限（管理端接口不返回） */
+  permissions?: TeamPermissions;
+}
+
+export function toPublicTeam(record: TeamRecord): PublicTeam {
+  return {
+    id: record.id,
+    name: record.name,
+    createdBy: record.created_by,
+    quotaBytes: record.quota_bytes,
+    allowImage: !!record.allow_image,
+    allowFile: !!record.allow_file,
+    maxImageBytes: record.max_image_bytes,
+    maxFileBytes: record.max_file_bytes,
+    readonly: !!record.readonly,
+    inviteToken: record.invite_token,
+    defaultCanCreate: !!record.default_can_create,
+    defaultCanUpdate: !!record.default_can_update,
+    defaultCanDelete: !!record.default_can_delete,
+    defaultIsAdmin: !!record.default_is_admin,
+    autoJoin: !!record.auto_join,
+    createdAt: record.created_at,
+  };
+}
+
+export interface PublicTeamMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
+export function toPublicTeamMember(
+  record: TeamMemberRecord,
+  user?: { email: string; display_name: string } | null
+): PublicTeamMember {
+  return {
+    userId: record.user_id,
+    email: user?.email ?? '',
+    displayName: user?.display_name ?? '',
+    canCreate: !!record.can_create,
+    canUpdate: !!record.can_update,
+    canDelete: !!record.can_delete,
+    isAdmin: !!record.is_admin,
+    createdAt: record.created_at,
+  };
 }
 
 /** 文件夹（目录）。parent_id 为 null 表示根级 */
@@ -195,6 +311,8 @@ export interface PublicDocument {
   linkShared: boolean;
   linkMode: LinkShareMode | null;
   folderId: string | null;
+  /** 所属团队空间；null 表示个人空间 */
+  teamId: string | null;
   starred: boolean;
   lastOpenedAt: string | null;
   /** 当前访问者相对于该文档的身份 */
@@ -219,6 +337,7 @@ export function toPublicDocument(
     linkShared: !!doc.link_mode,
     linkMode: doc.link_mode,
     folderId: doc.folder_id ?? null,
+    teamId: doc.team_id ?? null,
     starred: !!doc.starred,
     lastOpenedAt: doc.last_opened_at ?? null,
     myRole: options?.myRole,

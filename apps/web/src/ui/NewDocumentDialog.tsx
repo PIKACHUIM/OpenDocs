@@ -48,6 +48,8 @@ interface NewDocumentDialogProps {
   onClose: () => void;
   /** 新建到哪个目录；null / 不传表示根目录 */
   folderId?: string | null;
+  /** 新建到哪个团队空间；null / 不传表示个人空间 */
+  teamId?: string | null;
 }
 
 /**
@@ -57,7 +59,12 @@ interface NewDocumentDialogProps {
  *   1. 最近文档：列表里点一下直接打开（该类型、按最近打开排序）
  *   2. 选模板新建：默认选中「空白文档」，选好后点创建
  */
-export function NewDocumentDialog({ type, onClose, folderId = null }: NewDocumentDialogProps) {
+export function NewDocumentDialog({
+  type,
+  onClose,
+  folderId = null,
+  teamId = null,
+}: NewDocumentDialogProps) {
   const [recent, setRecent] = useState<ApiDocument[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [templateId, setTemplateId] = useState(BLANK_TEMPLATE_ID);
@@ -101,6 +108,7 @@ export function NewDocumentDialog({ type, onClose, folderId = null }: NewDocumen
         title: selected.title ?? `未命名${DOC_TYPE_LABEL[type]}`,
         content,
         folderId,
+        teamId,
       });
       onClose();
       navigate(`/d/${data.document.id}`);

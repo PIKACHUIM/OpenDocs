@@ -121,6 +121,40 @@ export const SCHEMA_STATEMENTS: string[] = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code)`,
+
+  // 团队空间：管理员创建，成员按权限协作
+  `CREATE TABLE IF NOT EXISTS teams (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    quota_bytes INTEGER NOT NULL DEFAULT 0,
+    allow_image INTEGER NOT NULL DEFAULT 1,
+    allow_file INTEGER NOT NULL DEFAULT 1,
+    max_image_bytes INTEGER NOT NULL DEFAULT 0,
+    max_file_bytes INTEGER NOT NULL DEFAULT 0,
+    readonly INTEGER NOT NULL DEFAULT 0,
+    invite_token TEXT,
+    default_can_create INTEGER NOT NULL DEFAULT 1,
+    default_can_update INTEGER NOT NULL DEFAULT 1,
+    default_can_delete INTEGER NOT NULL DEFAULT 0,
+    default_is_admin INTEGER NOT NULL DEFAULT 0,
+    auto_join INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_invite ON teams (invite_token)`,
+
+  `CREATE TABLE IF NOT EXISTS team_members (
+    team_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    can_create INTEGER NOT NULL DEFAULT 1,
+    can_update INTEGER NOT NULL DEFAULT 1,
+    can_delete INTEGER NOT NULL DEFAULT 0,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members (user_id, created_at DESC)`,
 ];
 
 /**
@@ -132,6 +166,8 @@ const COLUMN_PATCHES: string[] = [
   'ALTER TABLE documents ADD COLUMN folder_id TEXT',
   'ALTER TABLE documents ADD COLUMN starred INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE documents ADD COLUMN last_opened_at TEXT',
+  // 文档归属的团队空间；NULL 表示个人空间
+  'ALTER TABLE documents ADD COLUMN team_id TEXT',
 ];
 
 const ready = new Map<string, Promise<void>>();

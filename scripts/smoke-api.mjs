@@ -475,6 +475,95 @@ console.log('\n[5] 管理员：统计 / 用户管理 / 文档管理 / 系统设�
   check('普通用户访问管理接口被拒', forbiddenUser.status === 403, forbiddenUser.data);
 }
 
+console.log('\n[9] 团队空间：创建 / 邀请 / 加入 / 权限 / 只读 / 管理员保护');
+{
+  cookie = adminCookie;
+  const created = await call('POST', '/api/admin/teams', {
+    name: '测试团队',
+    defaultCanDelete: false,
+    defaultCanUpdate: true,
+  });
+  check('创建团队空间', created.status === 201 && !!created.data?.team?.id, created.data);
+  const teamId = created.data?.team?.id ?? '';
+
+  const invite = await call('POST', `/api/admin/teams/${teamId}/invite`);
+  check('生成邀请令牌', invite.status === 200 && !!invite.data?.inviteToken, invite.data);
+
+  // 同一空间只允许一个令牌：再次生成会替换旧的
+  const rotate = await call('POST', `/api/admin/teams/${teamId}/invite`);
+  check(
+    '重置后旧令牌失效、仍是单个令牌',
+    rotate.data?.inviteToken && rotate.data.inviteToken !== invite.data.inviteToken,
+    rotate.data
+  );
+
+  cookie = carolCookie;
+  const oldToken = await call('POST', '/api/teams/join', { token: invite.data.inviteToken });
+  check('旧令牌已失效', oldToken.status === 404, oldToken.data);
+
+  const join = await call('POST', '/api/teams/join', { token: rotate.data.inviteToken });
+  check('成员通过令牌加入', join.status === 200 && join.data?.teamId === teamId, join.data);
+
+  const myTeams = await call('GET', '/api/teams');
+  check(
+    '我的团队里出现该空间并带权限',
+    Array.isArray(myTeams.data?.teams) &&
+      myTeams.data.teams.some((team) => team.id === teamId && team.permissions?.canDelete === false),
+    myTeams.data
+  );
+
+  const doc = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '团队文档',
+    teamId,
+  });
+  check(
+    '成员可新建团队文档且归属正确',
+    doc.status === 201 && doc.data?.document?.teamId === teamId,
+    doc.data
+  );
+
+  const teamDocs = await call('GET', `/api/documents?teamId=${teamId}`);
+  check(
+    '团队文档列表可见',
+    Array.isArray(teamDocs.data?.documents) &&
+      teamDocs.data.documents.some((item) => item.id === doc.data.document.id),
+    teamDocs.data
+  );
+
+  // 只读模式：普通成员不能新建，管理员可以
+  cookie = adminCookie;
+  await call('PATCH', `/api/admin/teams/${teamId}`, { readonly: true });
+
+  cookie = carolCookie;
+  const blocked = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '只读期间的新文档',
+    teamId,
+  });
+  check('只读模式下成员不能新建', blocked.status === 403, blocked.data);
+
+  cookie = adminCookie;
+  const adminCreate = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '管理员在只读空间新建',
+    teamId,
+  });
+  check('只读模式下管理员仍可新建', adminCreate.status === 201, adminCreate.data);
+
+  // 管理员保护：不能把自己降级
+  const me = await call('GET', '/api/auth/me');
+  const selfDemote = await call('PATCH', `/api/admin/users/${me.data?.user?.id}`, {
+    role: 'user',
+  });
+  check('管理员不能自我降级', selfDemote.status === 409, selfDemote.data);
+
+  // 清理：删除团队空间，文档退回个人空间
+  await call('DELETE', `/api/admin/teams/${teamId}`);
+  const afterDelete = await call('GET', `/api/documents?teamId=${teamId}`);
+  check('删除团队空间后列表不可再访问', afterDelete.status === 404, afterDelete.data);
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));
