@@ -18,6 +18,8 @@ export interface ApiUser {
 
 export interface AdminUser extends ApiUser {
   documentCount: number;
+  /** 是否为超级管理员（不可被降级或删除） */
+  isSuperAdmin?: boolean;
 }
 
 export interface ApiDocument {

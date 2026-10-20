@@ -34,7 +34,14 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 }
 
 export const authApi = {
-  me: () => api<{ user: ApiUser | null; storage: string; config: PublicConfig }>('/auth/me'),
+  me: () =>
+    api<{
+      user: ApiUser | null;
+      /** 是否为超级管理员 */
+      isSuperAdmin?: boolean;
+      storage: string;
+      config: PublicConfig;
+    }>('/auth/me'),
   login: (json: { email: string; password: string; turnstileToken?: string }) =>
     api<{ user: ApiUser }>('/auth/login', { method: 'POST', json }),
   register: (json: {

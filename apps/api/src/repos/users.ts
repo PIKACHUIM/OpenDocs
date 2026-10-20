@@ -118,15 +118,22 @@ export function createUserRepo(sql: SqlClient) {
   };
 
   /**
-   * 最早创建的管理员（ID 最小）。
-   * 规则要求它不能被取消管理员，避免所有人一起降级导致后台无人可管。
+   * 超级管理员：最早创建的管理员（数据库 rowid 最小）。
+   *
+   * 规则：
+   * - 只有超级管理员可以授予/取消管理员
+   * - 超级管理员不能被取消管理员、也不能被删除
+   * 用 rowid 而不是字符串 id，是因为用户 id 是随机前缀，无法比较大小。
    */
-  const getFirstAdminId = async (): Promise<string | null> => {
+  const getSuperAdminId = async (): Promise<string | null> => {
     const row = await sql.first<{ id: string }>(
       "SELECT id FROM users WHERE role = 'admin' ORDER BY rowid ASC LIMIT 1"
     );
     return row?.id ?? null;
   };
+
+  /** 兼容旧调用名 */
+  const getFirstAdminId = getSuperAdminId;
 
   const count = async (): Promise<number> => {
     const row = await sql.first<{ n: number }>('SELECT COUNT(*) AS n FROM users');
@@ -157,6 +164,7 @@ export function createUserRepo(sql: SqlClient) {
     update,
     remove,
     countAdmins,
+    getSuperAdminId,
     getFirstAdminId,
     count,
     list,

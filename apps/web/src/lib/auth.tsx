@@ -15,6 +15,8 @@ interface AuthContextValue {
   storage: string;
   loading: boolean;
   isAdmin: boolean;
+  /** 是否为超级管理员（可设置/取消管理员） */
+  isSuperAdmin: boolean;
   refresh: () => Promise<void>;
   login: (email: string, password: string, turnstileToken?: string) => Promise<ApiUser>;
   register: (input: {
@@ -34,11 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [storage, setStorage] = useState('unknown');
   const [loading, setLoading] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       const data = await authApi.me();
       setUser(data.user);
+      setIsSuperAdmin(!!data.isSuperAdmin);
       setConfig(data.config);
       setStorage(data.storage);
     } catch {
@@ -96,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       storage,
       loading,
       isAdmin: user?.role === 'admin',
+      isSuperAdmin,
       refresh,
       login,
       register,

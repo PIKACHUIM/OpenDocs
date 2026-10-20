@@ -633,6 +633,56 @@ console.log('\n[10] 文档级权限：读/改分开、删除只属所有者');
   check('有新建权限时可在分享目录建文档', createInShared.status === 201, createInShared.data);
 }
 
+console.log('\n[11] 超级管理员：设置/取消管理员、自我保护');
+{
+  cookie = adminCookie;
+  const me = await call('GET', '/api/auth/me');
+  check('me 返回超级管理员标记', me.data?.isSuperAdmin === true, me.data?.isSuperAdmin);
+
+  const list = await call('GET', '/api/admin/users?page=1&pageSize=50');
+  const superUser = list.data?.users?.find((user) => user.isSuperAdmin);
+  const carol = list.data?.users?.find((user) => user.email === 'carol@example.com');
+  const bob = list.data?.users?.find((user) => user.email === 'bob@example.com');
+  check(
+    '用户列表标记超级管理员',
+    superUser?.email === 'admin@example.com',
+    superUser?.email
+  );
+
+  const promote = await call('PATCH', `/api/admin/users/${carol.id}`, { role: 'admin' });
+  check('超级管理员可以设置管理员', promote.status === 200, promote.data);
+
+  cookie = carolCookie;
+  const byNormalAdmin = await call('PATCH', `/api/admin/users/${bob.id}`, { role: 'admin' });
+  check('普通管理员不能设置管理员', byNormalAdmin.status === 403, byNormalAdmin.data);
+
+  const demoteSuper = await call('PATCH', `/api/admin/users/${superUser.id}`, { role: 'user' });
+  check(
+    '普通管理员不能取消超级管理员',
+    demoteSuper.status === 403 || demoteSuper.status === 409,
+    demoteSuper.data
+  );
+
+  const deleteSuper = await call('DELETE', `/api/admin/users/${superUser.id}`);
+  check('普通管理员不能删除超级管理员', deleteSuper.status === 409, deleteSuper.data);
+
+  const deleteSelf = await call('DELETE', `/api/admin/users/${carol.id}`);
+  check('管理员不能删除自己', deleteSelf.status === 409, deleteSelf.data);
+
+  const demoteSelf = await call('PATCH', `/api/admin/users/${carol.id}`, { role: 'user' });
+  check('管理员不能取消自己的管理员', demoteSelf.status === 409, demoteSelf.data);
+
+  cookie = adminCookie;
+  const demoteCarol = await call('PATCH', `/api/admin/users/${carol.id}`, { role: 'user' });
+  check('超级管理员可以取消管理员', demoteCarol.status === 200, demoteCarol.data);
+
+  const selfDemote = await call('PATCH', `/api/admin/users/${superUser.id}`, { role: 'user' });
+  check('超级管理员不能取消自己', selfDemote.status === 409, selfDemote.data);
+
+  const selfDelete = await call('DELETE', `/api/admin/users/${superUser.id}`);
+  check('超级管理员不能删除自己', selfDelete.status === 409, selfDelete.data);
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));

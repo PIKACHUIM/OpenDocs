@@ -43,7 +43,7 @@ function formatTime(value: string): string {
 }
 
 export function AdminPage() {
-  const { user, loading: authLoading, isAdmin, refresh } = useAuth();
+  const { user, loading: authLoading, isAdmin, isSuperAdmin, refresh } = useAuth();
   const [tab, setTab] = useState<Tab>('overview');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -415,7 +415,11 @@ export function AdminPage() {
                       </td>
                       <td>
                         <span className={item.role === 'admin' ? styles.tag : styles.tagMuted}>
-                          {item.role === 'admin' ? '管理员' : '普通用户'}
+                          {item.isSuperAdmin
+                            ? '超级管理员'
+                            : item.role === 'admin'
+                              ? '管理员'
+                              : '普通用户'}
                         </span>
                       </td>
                       <td>
@@ -428,7 +432,17 @@ export function AdminPage() {
                         <div className={styles.row}>
                           <button
                             className={`${styles.button} ${styles.buttonSm}`}
-                            disabled={busy}
+                            // 只有超级管理员能改管理员身份；不能改自己，也不能动超级管理员
+                            disabled={busy || !isSuperAdmin || item.id === user?.id || item.isSuperAdmin}
+                            title={
+                              !isSuperAdmin
+                                ? '只有超级管理员可以设置或取消管理员'
+                                : item.isSuperAdmin
+                                  ? '超级管理员不能被降级'
+                                  : item.id === user?.id
+                                    ? '不能修改自己的管理员身份'
+                                    : undefined
+                            }
                             onClick={() =>
                               void run(async () => {
                                 await adminApi.updateUser(item.id, { role: item.role === 'admin' ? 'user' : 'admin' });
@@ -465,7 +479,14 @@ export function AdminPage() {
                           </button>
                           <button
                             className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
-                            disabled={busy}
+                            disabled={busy || item.id === user?.id || item.isSuperAdmin}
+                            title={
+                              item.id === user?.id
+                                ? '不能删除当前登录的账号'
+                                : item.isSuperAdmin
+                                  ? '超级管理员不能被删除'
+                                  : undefined
+                            }
                             onClick={() => {
                               if (!window.confirm(`删除用户「${item.displayName}」？其名下 ${item.documentCount} 个文档会一并删除。`)) return;
                               void run(async () => {

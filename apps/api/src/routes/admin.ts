@@ -6,6 +6,7 @@ import { getText } from '../files';
 import {
   badRequest,
   conflict,
+  forbidden,
   json,
   notFound,
   readJson,
@@ -52,9 +53,15 @@ adminRoutes.get('/users', async (c) => {
 
   const users: UserRecord[] = result.items;
   const counts = await Promise.all(users.map((user) => c.get('repos').documents.countByOwner(user.id)));
+  const superAdminId = await c.get('repos').users.getSuperAdminId();
 
   return json({
-    users: users.map((user, index) => ({ ...toPublicUser(user), documentCount: counts[index] })),
+    users: users.map((user, index) => ({
+      ...toPublicUser(user),
+      documentCount: counts[index],
+      // 前端据此禁用「超级管理员」的降级/删除按钮
+      isSuperAdmin: user.id === superAdminId,
+    })),
     total: result.total,
     page,
     pageSize,
@@ -87,14 +94,24 @@ adminRoutes.patch('/users/:id', async (c) => {
   }
   if (body.role !== undefined) {
     if (body.role !== 'user' && body.role !== 'admin') throw badRequest('role 只能是 user 或 admin');
-    if (body.role !== 'admin' && target.role === 'admin') {
-      // 管理员不能把自己降级：降完就再也进不来了
-      if (target.id === actor.id) throw conflict('不能取消自己的管理员权限，请让其他管理员操作');
-      // 最早创建的管理员是「根管理员」，保留它保证后台始终有人可管
-      const firstAdminId = await c.get('repos').users.getFirstAdminId();
-      if (target.id === firstAdminId) throw conflict('首个管理员不能被取消管理员权限');
-      if ((await countActiveAdmins(c)) <= 1) throw conflict('至少需要保留一个管理员');
+
+    const superAdminId = await c.get('repos').users.getSuperAdminId();
+    const changingRole = body.role !== target.role;
+
+    if (changingRole) {
+      // 先判「自己」：不论是谁，都返回同一句明确提示
+      if (target.id === actor.id) throw conflict('不能修改自己的管理员身份');
+      // 授予 / 取消管理员是超级管理员的专属操作
+      if (actor.id !== superAdminId) {
+        throw forbidden('只有超级管理员可以设置或取消管理员');
+      }
+      // 超级管理员本身不可被降级
+      if (target.id === superAdminId) throw conflict('超级管理员不能被取消管理员权限');
+      if (body.role === 'user' && (await countActiveAdmins(c)) <= 1) {
+        throw conflict('至少需要保留一个管理员');
+      }
     }
+
     patch.role = body.role;
   }
   if (body.disabled !== undefined) {
@@ -124,10 +141,11 @@ adminRoutes.delete('/users/:id', async (c) => {
   const target = await c.get('repos').users.getById(c.req.param('id'));
   if (!target) throw notFound('用户不存在');
   const actor = c.get('user')!;
+  // 任何管理员都不能删除自己
   if (target.id === actor.id) throw conflict('不能删除当前登录的账号');
   if (target.role === 'admin') {
-    const firstAdminId = await c.get('repos').users.getFirstAdminId();
-    if (target.id === firstAdminId) throw conflict('首个管理员不能被删除');
+    const superAdminId = await c.get('repos').users.getSuperAdminId();
+    if (target.id === superAdminId) throw conflict('超级管理员不能被删除');
     if ((await countActiveAdmins(c)) <= 1) throw conflict('至少需要保留一个管理员');
   }
 

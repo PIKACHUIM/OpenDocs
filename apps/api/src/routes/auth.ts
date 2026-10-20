@@ -203,8 +203,11 @@ authRoutes.post('/logout', async (c) => {
 
 authRoutes.get('/me', async (c) => {
   const user = c.get('user');
+  const superAdminId = user ? await c.get('repos').users.getSuperAdminId() : null;
   return json({
     user: user ? toPublicUser(user) : null,
+    // 前端据此决定是否显示「设为管理员 / 取消管理员」
+    isSuperAdmin: !!user && user.id === superAdminId,
     storage: c.get('runtime').platform,
     config: await c.get('settings').publicConfig(),
   });
