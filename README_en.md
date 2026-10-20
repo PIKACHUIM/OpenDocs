@@ -9,7 +9,7 @@ One account, one folder tree, one sharing model — deploy once.
 
 [![Docs](https://img.shields.io/badge/docs-online-3370ff)](https://docs.opendocs.dev)
 [![Deploy](https://img.shields.io/badge/deploy-Cloudflare%20Workers-f38020)](docs/guide/deploy.md)
-[![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-d9322d)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](package.json)
 
 [简体中文](README.md) · [English](README_en.md) · [Documentation](https://docs.opendocs.dev)
@@ -27,7 +27,7 @@ The frontend is a static SPA. The backend is a Hono app that runs on edge runtim
 All data lives in your own Cloudflare (or EdgeOne) account; nothing goes through a third party.
 
 > The whiteboard is built on the open-source [Drawnix](https://github.com/plait-board/drawnix) core
-> (`packages/drawnix`, MIT). OpenDocs adds accounts, cloud storage, folders, sharing and an admin console.
+> (`packages/drawnix`, MIT, see [NOTICE](NOTICE)). OpenDocs adds accounts, cloud storage, folders, sharing and an admin console.
 
 ---
 
@@ -143,4 +143,12 @@ scripts/           dev, build, smoke tests
 
 ## License
 
-[MIT](LICENSE). The Drawnix whiteboard core is MIT-licensed, copyright its original authors.
+Released under [AGPL-3.0-or-later](LICENSE).
+
+**What this means**: if you modify OpenDocs and let other people use it over a network, you must offer those
+users the complete source of your modified version (AGPL-3.0, section 13). Running an unmodified copy, or a
+private copy that is not offered to others, carries no such obligation.
+
+The image editor is ported from [poster-design](https://github.com/palxiao/poster-design) (AGPL-3.0) and the
+presentation editor from [OpenPPT](https://github.com/YOOTeam/OpenPPT) (GPL-3.0), so the whole work is AGPL-3.0.
+Upstream copyrights and licenses are listed in [NOTICE](NOTICE).

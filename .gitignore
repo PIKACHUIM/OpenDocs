@@ -61,3 +61,7 @@ wrangler.test.jsonc
 
 # 参考项目源码（仅本地对照，不进入版本库）
 /references
+
+# 临时部署配置（含真实资源 ID）与调试脚本，绝不入库
+wrangler.deploy.tmp.*
+tmp_*.mjs

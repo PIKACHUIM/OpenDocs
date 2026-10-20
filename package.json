@@ -2,7 +2,7 @@
   "name": "opendocs",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "nx serve web --host=0.0.0.0",
     "build": "nx run-many -t=build",

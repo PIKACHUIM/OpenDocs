@@ -148,7 +148,13 @@ export function LandingPage() {
       </section>
 
       <footer className={styles.landingFooter}>
-        免登录试用模式下，内容只保存在当前浏览器；登录后才会同步到云端。
+        <div>免登录试用模式下，内容只保存在当前浏览器；登录后才会同步到云端。</div>
+        <div style={{ marginTop: 6 }}>
+          本站基于 AGPL-3.0 开源软件 OpenDocs 运行，使用者有权获取对应源码 ·{' '}
+          <a href="/LICENSE.txt" target="_blank" rel="noopener noreferrer">
+            许可证全文
+          </a>
+        </div>
       </footer>
     </div>
   );

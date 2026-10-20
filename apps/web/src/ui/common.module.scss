@@ -74,6 +74,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .authCard {
+  box-sizing: border-box;
   width: 100%;
   max-width: 400px;
   padding: 40px 36px;
@@ -136,6 +137,9 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 .input,
 .select,
 .textarea {
+  // 全局没有 `* { box-sizing: border-box }` 重置：width:100% 的表单控件若按
+  // content-box 计算，会因 padding/border 额外撑出 26px，被卡片 overflow:hidden 裁掉右边框
+  box-sizing: border-box;
   width: 100%;
   padding: 9px 12px;
   border: 1px solid $border-strong;
@@ -203,6 +207,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 // ---------------------------------------------------------------------------
 
 .button {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -582,6 +587,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .sidebarItem {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -700,6 +706,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .searchInput {
+  box-sizing: border-box;
   width: 220px;
   height: 32px;
   padding: 0 10px;
@@ -1019,6 +1026,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .dropdownItem {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   padding: 7px 10px;
@@ -1061,6 +1069,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .contextMenuItem {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   padding: 7px 10px;
@@ -1481,6 +1490,7 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 }
 
 .layerItem {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;

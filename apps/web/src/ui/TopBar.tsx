@@ -56,22 +56,22 @@ export function TopBar({ children }: { children?: ReactNode }) {
           className={navItem(route.kind === 'local')}
           onClick={() => navigate('/local')}
         >
-          思维导图
+          Mind 思维导图
         </button>
         <button type="button" className={styles.navItem} onClick={() => quickCreate('word')}>
-          Word
+          Word 文档
         </button>
         <button type="button" className={styles.navItem} onClick={() => quickCreate('excel')}>
-          Excel
+          Excel 表格
         </button>
         <button type="button" className={styles.navItem} onClick={() => quickCreate('ppt')}>
-          演示文稿
+          PPT 演示
         </button>
         <button type="button" className={styles.navItem} onClick={() => quickCreate('markdown')}>
-          Markdown
+          Markdown 文档
         </button>
         <button type="button" className={styles.navItem} onClick={() => navigate('/image')}>
-          图片编辑
+          PicEdit 图片
         </button>
       </nav>
 

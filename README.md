@@ -9,7 +9,7 @@
 
 [![Docs](https://img.shields.io/badge/docs-online-3370ff)](https://docs.opendocs.dev)
 [![Deploy](https://img.shields.io/badge/deploy-Cloudflare%20Workers-f38020)](docs/guide/deploy.md)
-[![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-d9322d)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](package.json)
 
 [简体中文](README.md) · [English](README_en.md) · [在线文档](https://docs.opendocs.dev)
@@ -26,7 +26,7 @@ OpenDocs 把「画」和「写」放进同一个工作台：既要能画白板�
 前端是纯静态产物，后端是一个可部署到边缘运行时的 Hono 应用。
 数据全部落在自己的 Cloudflare（或 EdgeOne）账号下，不经过任何第三方服务。
 
-> 白板内核来自开源项目 [Drawnix](https://github.com/plait-board/drawnix)（`packages/drawnix`，MIT）。
+> 白板内核来自开源项目 [Drawnix](https://github.com/plait-board/drawnix)（`packages/drawnix`，MIT，声明见 [NOTICE](NOTICE)）。
 > OpenDocs 在其之上补齐了账号、云端存储、目录、分享与管理后台。
 
 ---
@@ -168,20 +168,25 @@ npm run build:web
 
 ## 致谢
 
-OpenDocs 的形态与部分实现思路来自这些优秀的开源项目，界面上已统一为 OpenDocs 品牌，
-在此一并致谢（排名不分先后）：
+OpenDocs 站在这些优秀开源项目之上，界面统一为 OpenDocs 品牌，在此致谢：
 
-| 项目 | 在本项目中的角色 | 链接 |
-| --- | --- | --- |
-| Drawnix | 白板内核（`packages/drawnix`），无限画布与思维导图能力 | https://github.com/plait-board/drawnix |
-| Univer | 表格编辑引擎（公式、数字格式、多工作表） | https://github.com/dream-num/univer |
-| PPTist | 演示文稿编辑器的交互与功能参考 | https://github.com/pipipi-pikachu/PPTist |
-| OpenPPT | 演示文稿自由画布的产品形态参考 | https://github.com/YOOTeam/OpenPPT |
-| poster-design | 图片/海报编辑器的信息架构与交互参考 | https://github.com/palxiao/poster-design |
+| 项目 | 在本项目中的角色 | 许可证 | 链接 |
+| --- | --- | --- | --- |
+| poster-design | 图片编辑器的移植来源（编辑器布局、元素模型、图层与样式面板，以 React 重新实现） | AGPL-3.0 | https://github.com/palxiao/poster-design |
+| OpenPPT | 演示文稿编辑器的移植来源（幻灯片模型、工具栏与元素样式面板，以 React 重新实现） | GPL-3.0 | https://github.com/YOOTeam/OpenPPT |
+| Drawnix | 白板内核（`packages/drawnix`），无限画布与思维导图 | MIT | https://github.com/plait-board/drawnix |
+| Univer | 表格与文档引擎（以 npm 包方式引入） | Apache-2.0 | https://github.com/dream-num/univer |
+| PPTist | OpenPPT 的上游，交互与功能参考 | AGPL-3.0 | https://github.com/pipipi-pikachu/PPTist |
 
-> 说明：以上项目仅作为实现参考或底层依赖，OpenDocs 的界面、品牌与交互统一由本项目维护；
-> 各自代码的版权与许可归原作者所有。
+> 各项目的版权归原作者所有，完整声明见 [NOTICE](NOTICE)。
 
 ## 许可
 
-[MIT](LICENSE)。白板内核 Drawnix 同样以 MIT 发布，版权归其原作者所有。
+本项目以 [AGPL-3.0-or-later](LICENSE) 发布。
+
+**这意味着什么**：任何人修改本项目并通过网络向他人提供服务，必须向这些用户公开修改后的完整源码（AGPL-3.0 第 13 条）。
+自行部署且不对外提供服务、或不做任何修改的，不受此条约束。
+
+图片编辑器移植自 [poster-design](https://github.com/palxiao/poster-design)（AGPL-3.0），
+演示文稿编辑器移植自 [OpenPPT](https://github.com/YOOTeam/OpenPPT)（GPL-3.0），
+因此整体采用 AGPL-3.0。各上游项目的版权与许可证见 [NOTICE](NOTICE)。

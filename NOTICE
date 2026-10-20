@@ -1,0 +1,67 @@
+OpenDocs
+Copyright (C) 2026 OpenDocs contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+Because OpenDocs is distributed under the AGPL-3.0, anyone who runs a modified
+version of it and lets users interact with it over a network MUST offer those
+users the Corresponding Source of that modified version (AGPL-3.0, section 13).
+
+--------------------------------------------------------------------------------
+Third-party components and sources
+--------------------------------------------------------------------------------
+
+OpenDocs incorporates, adapts or links the following projects. Each retains its
+own copyright; their licenses are compatible with distribution of the combined
+work under AGPL-3.0.
+
+1. poster-design
+   https://github.com/palxiao/poster-design
+   Copyright (C) palxiao
+   License: GNU Affero General Public License v3.0 or later
+   Used for: the image / poster editor (editor layout, widget model, layer
+   panel, style panel), re-implemented in React.
+
+2. OpenPPT
+   https://github.com/YOOTeam/OpenPPT
+   License: GNU General Public License v3.0
+   Used for: the presentation editor (slide model, editing toolbar, element
+   style panels), re-implemented in React. GPL-3.0 section 13 permits combining
+   GPL-3.0 code with AGPL-3.0 code in one work.
+
+3. Drawnix
+   https://github.com/plait-board/drawnix
+   Used for: the whiteboard / mind-map core (packages/drawnix).
+   License: MIT (full text below).
+
+4. Univer
+   https://github.com/dream-num/univer
+   License: Apache License 2.0
+   Used for: the spreadsheet and document engines (linked as npm packages).
+
+--------------------------------------------------------------------------------
+Drawnix - MIT License
+--------------------------------------------------------------------------------
+
+Copyright (c) 2024 Drawnix
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
