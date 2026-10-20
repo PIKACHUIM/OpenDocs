@@ -102,7 +102,21 @@ export interface SlideImageElement extends SlideElementBase {
   src: string;
 }
 
-export type SlideElement = SlideTextElement | SlideShapeElement | SlideImageElement;
+export interface SlideTableElement extends SlideElementBase {
+  type: 'table';
+  /** 二维文本，第一行作为表头 */
+  rows: string[][];
+  fontSize: number;
+  color: string;
+  headerFill: string;
+  borderColor: string;
+}
+
+export type SlideElement =
+  | SlideTextElement
+  | SlideShapeElement
+  | SlideImageElement
+  | SlideTableElement;
 
 export interface PptSlide {
   id: string;

@@ -96,6 +96,20 @@ async function buildSlide(pptx: PptxGenJS, data: PptSlide) {
       continue;
     }
 
+    if (element.type === 'table') {
+      slide.addTable(
+        element.rows.map((row) => row.map((cell) => ({ text: cell }))),
+        {
+          ...box,
+          fontSize: Math.max(8, element.fontSize * PT),
+          color: hex(element.color, '1B1F24'),
+          border: { type: 'solid', pt: 1, color: hex(element.borderColor, 'D5D8DE') },
+          valign: 'middle',
+        }
+      );
+      continue;
+    }
+
     if (
       element.type === 'rect' ||
       element.type === 'ellipse' ||

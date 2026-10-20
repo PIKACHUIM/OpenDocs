@@ -248,6 +248,25 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       radius: 16,
     } as SlideShapeElement);
 
+  const addTable = () =>
+    addElement({
+      id: createId('el'),
+      type: 'table',
+      x: 200,
+      y: 200,
+      w: 880,
+      h: 320,
+      rows: [
+        ['表头 1', '表头 2', '表头 3'],
+        ['', '', ''],
+        ['', '', ''],
+      ],
+      fontSize: 24,
+      color: '#1b1f24',
+      headerFill: '#eef3ff',
+      borderColor: '#d5d8de',
+    } as SlideElement);
+
   const addImageUrl = (src: string) =>
     addElement({
       id: createId('el'),
@@ -539,6 +558,53 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         />
       );
     }
+    if (element.type === 'table') {
+      return (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            border: `1px solid ${element.borderColor}`,
+            fontSize: element.fontSize * scale,
+            color: element.color,
+            pointerEvents: 'none',
+            boxSizing: 'border-box',
+          }}
+        >
+          {element.rows.map((row, rowIndex) => (
+            <div
+              key={rowIndex}
+              style={{
+                flex: 1,
+                display: 'grid',
+                gridTemplateColumns: `repeat(${row.length}, 1fr)`,
+                borderBottom:
+                  rowIndex < element.rows.length - 1 ? `1px solid ${element.borderColor}` : undefined,
+              }}
+            >
+              {row.map((cell, cellIndex) => (
+                <div
+                  key={cellIndex}
+                  style={{
+                    padding: 4 * scale,
+                    overflow: 'hidden',
+                    background: rowIndex === 0 ? element.headerFill : 'transparent',
+                    fontWeight: rowIndex === 0 ? 600 : 400,
+                    borderRight:
+                      cellIndex < row.length - 1 ? `1px solid ${element.borderColor}` : undefined,
+                  }}
+                >
+                  {cell}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     if (element.type === 'triangle') {
       return (
         <div
@@ -614,6 +680,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             onClick={() => addShape('line')}
           >
             线条
+          </button>
+          <button
+            type="button"
+            className={styles.topbarButton}
+            disabled={!canWrite}
+            onClick={addTable}
+          >
+            表格
           </button>
           <button
             type="button"
@@ -1019,7 +1093,53 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               </>
             ) : null}
 
-            {selected.type === 'rect' || selected.type === 'ellipse' ? (
+            {selected.type === 'table' ? (
+              <>
+                <div className={styles.propField}>
+                  <span>表格内容（每行一条，单元格用 | 分隔）</span>
+                  <textarea
+                    className={styles.propInput}
+                    style={{ minHeight: 96, resize: 'vertical' }}
+                    value={selected.rows.map((row) => row.join(' | ')).join('\n')}
+                    disabled={!canWrite}
+                    onChange={(event) => {
+                      const rows = event.target.value
+                        .split('\n')
+                        .map((line) => line.split('|').map((cell) => cell.trim()));
+                      patchElement(selected.id, { rows } as never);
+                    }}
+                  />
+                </div>
+                <div className={styles.propField}>
+                  <span>字号 / 表头底色</span>
+                  <div className={styles.propRow}>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      min={8}
+                      value={selected.fontSize}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, {
+                          fontSize: Number(event.target.value) || 20,
+                        } as never)
+                      }
+                    />
+                    <input
+                      className={styles.propInput}
+                      type="color"
+                      value={selected.headerFill}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, { headerFill: event.target.value } as never)
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            {selected.type === 'rect' || selected.type === 'ellipse' || selected.type === 'triangle' || selected.type === 'line' ? (
               <div className={styles.propField}>
                 <span>填充色</span>
                 <input
@@ -1193,6 +1313,15 @@ function SlidePreview({ slide }: { slide: PptSlide }) {
             >
               {element.text}
             </span>
+          ) : element.type === 'table' ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                border: '1px solid #d5d8de',
+                background: element.headerFill,
+              }}
+            />
           ) : element.type === 'image' ? (
             <img src={element.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
