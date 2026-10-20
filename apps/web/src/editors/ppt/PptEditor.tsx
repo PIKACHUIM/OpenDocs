@@ -499,6 +499,96 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       borderColor: '#d5d8de',
     } as SlideElement);
 
+  /** 按版式新建页面：标题页 / 标题+内容 / 两栏 / 空白 */
+  const addSlideLayout = (kind: 'title' | 'titleBody' | 'twoColumn' | 'blank') => {
+    const text = (
+      partial: Partial<SlideTextElement> & Pick<SlideTextElement, 'x' | 'y' | 'w' | 'h' | 'text'>
+    ): SlideTextElement => ({
+      id: createId('el'),
+      type: 'text',
+      fontSize: 28,
+      color: theme.fontColor,
+      bold: false,
+      align: 'left',
+      ...partial,
+    });
+
+    const elements: SlideElement[] = [];
+    if (kind === 'title') {
+      elements.push(
+        text({
+          x: 140,
+          y: 270,
+          w: 1000,
+          h: 120,
+          text: '标题',
+          fontSize: 64,
+          bold: true,
+          align: 'center',
+        }),
+        text({
+          x: 140,
+          y: 400,
+          w: 1000,
+          h: 70,
+          text: '副标题',
+          fontSize: 28,
+          align: 'center',
+          color: '#86909c',
+        })
+      );
+    } else if (kind === 'titleBody') {
+      elements.push(
+        text({ x: 100, y: 80, w: 1080, h: 90, text: '标题', fontSize: 44, bold: true }),
+        text({
+          x: 100,
+          y: 200,
+          w: 1080,
+          h: 420,
+          text: '要点一\n要点二\n要点三',
+          fontSize: 28,
+          bullet: true,
+          lineHeight: 1.6,
+        })
+      );
+    } else if (kind === 'twoColumn') {
+      elements.push(
+        text({ x: 100, y: 80, w: 1080, h: 90, text: '标题', fontSize: 44, bold: true }),
+        text({
+          x: 100,
+          y: 200,
+          w: 520,
+          h: 420,
+          text: '左栏内容',
+          fontSize: 26,
+          bullet: true,
+          lineHeight: 1.6,
+        }),
+        text({
+          x: 660,
+          y: 200,
+          w: 520,
+          h: 420,
+          text: '右栏内容',
+          fontSize: 26,
+          bullet: true,
+          lineHeight: 1.6,
+        })
+      );
+    }
+
+    pushHistory();
+    onChange({
+      ...content,
+      slides: [
+        ...slides,
+        { id: createId('slide'), background: theme.backgroundColor, elements },
+      ],
+    });
+    setActive(slides.length);
+    setSelectedId(null);
+  };
+
   const addImageUrl = (src: string) =>
     addElement({
       id: createId('el'),
@@ -1301,6 +1391,44 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                 应用主题
               </button>
             </div>
+
+            <div className={styles.propField}>
+              <span>新建页面（版式）</span>
+              <div className={styles.propActions}>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  disabled={!canWrite}
+                  onClick={() => addSlideLayout('title')}
+                >
+                  标题页
+                </button>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  disabled={!canWrite}
+                  onClick={() => addSlideLayout('titleBody')}
+                >
+                  标题+内容
+                </button>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  disabled={!canWrite}
+                  onClick={() => addSlideLayout('twoColumn')}
+                >
+                  两栏
+                </button>
+                <button
+                  type="button"
+                  className={styles.propButton}
+                  disabled={!canWrite}
+                  onClick={() => addSlideLayout('blank')}
+                >
+                  空白
+                </button>
+              </div>
+            </div>
           </>
         ) : null}
 
@@ -2001,6 +2129,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               </div>
             ))}
           </div>
+          {/* 演讲者备注：仅放映时显示，不进入画布 */}
+          {presentSlide.notes ? (
+            <div className={styles.presentNotes}>
+              <strong>备注</strong>
+              <span>{presentSlide.notes}</span>
+            </div>
+          ) : null}
+
           <div className={styles.presentBar}>
             <span>
               {presentIndex + 1} / {slides.length}

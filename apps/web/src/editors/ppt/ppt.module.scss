@@ -292,6 +292,30 @@ $bg: #f2f3f5;
   background: #fff;
 }
 
+// 放映时的演讲者备注（左下角，不进入画布）
+.presentNotes {
+  position: fixed;
+  left: 20px;
+  bottom: 16px;
+  max-width: 42vw;
+  max-height: 22vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  line-height: 1.7;
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+  }
+}
+
 .presentBar {
   position: fixed;
   right: 20px;
