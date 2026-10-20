@@ -53,6 +53,10 @@ export function PosterEditor() {
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [exporting, setExporting] = useState(false);
+  /** 画笔模式与笔刷参数 */
+  const [drawMode, setDrawMode] = useState(false);
+  const [brushColor, setBrushColor] = useState('#1b1f24');
+  const [brushWidth, setBrushWidth] = useState(4);
   const [creating, setCreating] = useState(false);
   const [picker, setPicker] = useState<null | { mode: 'replace'; uuid: string } | { mode: 'background' }>(null);
   const versionRef = useRef(1);
@@ -330,6 +334,34 @@ export function PosterEditor() {
         <button type="button" className={`${styles.topButton} ${styles.topIcon}`} disabled={!canUndo} title="撤销 (Ctrl+Z)" onClick={undo}>
           ↶
         </button>
+        <button
+          type="button"
+          className={`${styles.topButton} ${drawMode ? styles.topButtonPrimary : ''}`}
+          title="画笔：在画布上拖动绘制，画完自动退出"
+          onClick={() => setDrawMode((value) => !value)}
+        >
+          {drawMode ? '绘制中…' : '画笔'}
+        </button>
+        {drawMode ? (
+          <>
+            <input
+              type="color"
+              value={brushColor}
+              title="画笔颜色"
+              style={{ width: 30, height: 28, padding: 0, border: '1px solid #d5d8de', borderRadius: 6 }}
+              onChange={(event) => setBrushColor(event.target.value)}
+            />
+            <input
+              type="number"
+              min={1}
+              max={40}
+              value={brushWidth}
+              title="画笔粗细"
+              style={{ width: 56, height: 28, padding: '0 6px', border: '1px solid #d5d8de', borderRadius: 6 }}
+              onChange={(event) => setBrushWidth(Number(event.target.value) || 4)}
+            />
+          </>
+        ) : null}
         <button type="button" className={`${styles.topButton} ${styles.topIcon}`} disabled={!canRedo} title="重做 (Ctrl+Shift+Z)" onClick={redo}>
           ↷
         </button>
@@ -360,7 +392,12 @@ export function PosterEditor() {
       <div className={styles.body}>
         <WidgetPanel />
         <div className={styles.stage}>
-          <PosterCanvas />
+          <PosterCanvas
+            drawMode={drawMode}
+            brushColor={brushColor}
+            brushWidth={brushWidth}
+            onStrokeDone={() => setDrawMode(false)}
+          />
           <div className={styles.zoomBar}>
             <button type="button" className={styles.zoomButton} onClick={() => setZoom(zoom - 10)}>
               −

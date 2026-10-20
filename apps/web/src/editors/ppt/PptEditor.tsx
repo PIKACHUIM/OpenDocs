@@ -128,6 +128,17 @@ const ANIMATION_CSS = `
 @keyframes opd-wipe-in { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
 `;
 
+const ANIMATION_LABEL: Record<SlideAnimationType, string> = {
+  none: '无',
+  fadeIn: '淡入',
+  flyInLeft: '从左飞入',
+  flyInRight: '从右飞入',
+  flyInTop: '从上飞入',
+  flyInBottom: '从下飞入',
+  zoomIn: '放大',
+  wipeIn: '擦除',
+};
+
 const ANIMATION_NAME: Record<Exclude<SlideAnimationType, 'none'>, string> = {
   fadeIn: 'opd-fade-in',
   flyInLeft: 'opd-fly-left',
@@ -260,6 +271,12 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   /** 正在画布内直接编辑的文本元素 */
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** 放映：黑屏 / 备注开关 */
+  const [blackout, setBlackout] = useState(false);
+  const [showNotes, setShowNotes] = useState(true);
+  /** 画布内预览动画：tick 变化触发元素重新挂载，动画才会重播 */
+  const [previewTick, setPreviewTick] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -308,6 +325,44 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       window.removeEventListener('resize', calc);
     };
   }, []);
+
+  // 放映：监听全局键盘并进入全屏。放在 window 上而不是容器上，
+  // 避免焦点被内部元素抢走后快捷键失效。
+  useEffect(() => {
+    if (!presenting) return;
+    const onKey = (event: KeyboardEvent) => {
+      const nextKeys = ['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'];
+      const prevKeys = ['ArrowLeft', 'ArrowUp', 'PageUp'];
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setPresenting(false);
+        return;
+      }
+      if (nextKeys.includes(event.key)) {
+        event.preventDefault();
+        setPresentIndex((index) => Math.min(slides.length - 1, index + 1));
+        return;
+      }
+      if (prevKeys.includes(event.key)) {
+        event.preventDefault();
+        setPresentIndex((index) => Math.max(0, index - 1));
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === 'b') setBlackout((value) => !value);
+      if (key === 'n') setShowNotes((value) => !value);
+    };
+    window.addEventListener('keydown', onKey);
+    // 能进全屏就进；被浏览器拒绝（如缺少用户手势）时保持窗口内放映
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      setBlackout(false);
+      if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => undefined);
+      }
+    };
+  }, [presenting, slides.length]);
 
   useEffect(() => {
     if (!canWrite) return;
@@ -845,6 +900,26 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const selected = elements.find((item) => item.id === selectedId) ?? null;
 
+  /** 本页已设置进入动画的元素 */
+  const animatedElements = elements.filter(
+    (item) => item.animation && item.animation.type !== 'none'
+  );
+
+  /** 在画布内预览动画：重挂载元素以重播 */
+  const playPreview = () => {
+    setPreviewing(false);
+    setPreviewTick((tick) => tick + 1);
+    window.requestAnimationFrame(() => setPreviewing(true));
+    window.setTimeout(() => setPreviewing(false), 5000);
+  };
+
+  const clearAnimations = () => {
+    pushHistory();
+    patchSlide(active, {
+      elements: elements.map((item) => ({ ...item, animation: undefined }) as SlideElement),
+    });
+  };
+
   /** 主题：未设置时给一套默认配色，新建元素据此取色 */
   const theme = content.theme ?? {
     themeColors: ['#3370ff', '#14c9c9', '#ff7d00', '#f53f3f', '#722ed1'],
@@ -1243,7 +1318,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
         >
           {elements.map((element) => (
             <div
-              key={element.id}
+              key={previewing ? `${element.id}-p${previewTick}` : element.id}
               className={`${styles.element} ${
                 selectedIds.includes(element.id) ? styles.elementActive : ''
               }`}
@@ -1252,6 +1327,7 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                 top: element.y * scale,
                 width: element.w * scale,
                 height: element.h * scale,
+                ...(previewing ? animationStyle(element.animation) : {}),
               }}
               onPointerDown={(event) => onPointerDown(event, element, 'move')}
               onPointerMove={onPointerMove}
@@ -2061,6 +2137,46 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
           </div>
         </div>
 
+        {/* 本页动画：列出已设置的动画，可定位元素、整体预览或清除 */}
+        <div className={styles.propField} style={{ marginTop: 12 }}>
+          <span>本页动画（{animatedElements.length}）</span>
+          {animatedElements.length === 0 ? (
+            <p className={styles.hint}>选中元素后可在上方设置「进入动画」。</p>
+          ) : (
+            <div className={styles.propActions}>
+              {animatedElements.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={styles.propButton}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  {item.type === 'text' ? '文字' : item.type === 'image' ? '图片' : '元素'}·
+                  {ANIMATION_LABEL[item.animation?.type ?? 'none']}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className={styles.propActions}>
+            <button
+              type="button"
+              className={styles.propButton}
+              disabled={animatedElements.length === 0}
+              onClick={playPreview}
+            >
+              预览动画
+            </button>
+            <button
+              type="button"
+              className={styles.propButton}
+              disabled={!canWrite || animatedElements.length === 0}
+              onClick={clearAnimations}
+            >
+              清除全部
+            </button>
+          </div>
+        </div>
+
         <div className={styles.propActions} style={{ marginTop: 14 }}>
           <button
             type="button"
@@ -2097,16 +2213,21 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
       </div>
 
       {presenting ? (
-        <div
-          className={styles.present}
-          onClick={() => setPresentIndex((index) => Math.min(slides.length - 1, index + 1))}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') setPresenting(false);
-          }}
-          tabIndex={-1}
-          ref={(node) => node?.focus()}
-        >
+        <div className={styles.present}>
           <style>{ANIMATION_CSS}</style>
+
+          {/* 左侧 1/3 上一页、右侧 2/3 下一页，与常见放映器一致 */}
+          <div
+            className={styles.presentZonePrev}
+            onClick={() => setPresentIndex((index) => Math.max(0, index - 1))}
+          />
+          <div
+            className={styles.presentZoneNext}
+            onClick={() =>
+              setPresentIndex((index) => Math.min(slides.length - 1, index + 1))
+            }
+          />
+
           <div
             // key 带页码：翻页时重新挂载，元素动画才会重播
             key={`present-${presentIndex}`}
@@ -2129,18 +2250,32 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
               </div>
             ))}
           </div>
-          {/* 演讲者备注：仅放映时显示，不进入画布 */}
-          {presentSlide.notes ? (
+
+          {/* 黑屏：按 B 切换，讲解时常用 */}
+          {blackout ? <div className={styles.presentBlackout} /> : null}
+
+          {/* 演讲者备注：按 N 切换显示 */}
+          {showNotes && presentSlide.notes ? (
             <div className={styles.presentNotes}>
               <strong>备注</strong>
               <span>{presentSlide.notes}</span>
             </div>
           ) : null}
 
+          {/* 进度条 */}
+          <div className={styles.presentProgress}>
+            <span
+              style={{
+                width: `${((presentIndex + 1) / Math.max(1, slides.length)) * 100}%`,
+              }}
+            />
+          </div>
+
           <div className={styles.presentBar}>
             <span>
               {presentIndex + 1} / {slides.length}
             </span>
+            <span className={styles.presentHint}>← → 翻页 · B 黑屏 · N 备注 · Esc 退出</span>
             <button
               type="button"
               className={styles.propButton}

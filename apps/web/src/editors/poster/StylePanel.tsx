@@ -461,6 +461,23 @@ function GenericStyle({ widget }: { widget: Widget }) {
     <>
       <PositionSection widget={widget} />
       <div className={styles.block}>
+        {widget.type === 'w-brush' ? (
+          <>
+            <ColorField
+              label="笔刷颜色"
+              value={widget.color}
+              onChange={(color) => update(widget.uuid, { color })}
+            />
+            <SliderField
+              label="粗细"
+              value={widget.strokeWidth}
+              min={1}
+              max={40}
+              step={1}
+              onChange={(strokeWidth) => update(widget.uuid, { strokeWidth })}
+            />
+          </>
+        ) : null}
         <SliderField
           label="不透明"
           value={widget.opacity}
@@ -571,6 +588,7 @@ const TYPE_NAME: Record<string, string> = {
   'w-svg': '图形',
   'w-qrcode': '二维码',
   'w-group': '组合',
+  'w-brush': '画笔',
 };
 
 function LayerList() {

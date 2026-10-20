@@ -11,6 +11,7 @@
 import QRCodeStyling from 'qr-code-styling';
 import { memo, useEffect, useRef, type CSSProperties } from 'react';
 import type {
+  BrushWidget,
   GroupWidget,
   ImageWidget,
   QrcodeWidget,
@@ -226,6 +227,32 @@ function GroupLayer(_: { widget: GroupWidget }) {
   return null;
 }
 
+/** 自由画笔：把点序列画成一条平滑路径 */
+function BrushLayer({ widget }: { widget: BrushWidget }) {
+  if (widget.points.length < 2) return null;
+  const d = widget.points
+    .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x},${y}`)
+    .join(' ');
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${Math.max(1, widget.width)} ${Math.max(1, widget.height)}`}
+      preserveAspectRatio="none"
+      style={{ pointerEvents: 'none', overflow: 'visible' }}
+    >
+      <path
+        d={d}
+        fill="none"
+        stroke={widget.color}
+        strokeWidth={widget.strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /**
  * 一个图层。id 取 uuid，react-moveable 通过 `[id="uuid"]` 选择器定位目标，
  * 与原项目 Moveable.vue 里的 `[id="${val.uuid}"]` 完全一致。
@@ -285,6 +312,7 @@ function LayerImpl({ widget, parent, editingId, onTextChange, onEditEnd, onDoubl
       {widget.type === 'w-image' ? <ImageLayer widget={widget} /> : null}
       {widget.type === 'w-svg' ? <SvgLayer widget={widget} /> : null}
       {widget.type === 'w-qrcode' ? <QrLayer widget={widget} /> : null}
+      {widget.type === 'w-brush' ? <BrushLayer widget={widget} /> : null}
       {widget.type === 'w-group' ? <GroupLayer widget={widget} /> : null}
     </div>
   );

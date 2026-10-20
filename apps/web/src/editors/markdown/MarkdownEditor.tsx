@@ -54,6 +54,52 @@ export function MarkdownEditor({ content, canWrite, documentId, shareToken, onCh
     });
   };
 
+  /** 行内包裹：加粗、斜体、行内代码等；无选中时插入占位文本并选中它 */
+  const applyInline = (before: string, after: string, placeholder: string) => {
+    const textarea = textareaRef.current;
+    const current = content.markdown;
+    if (!textarea) {
+      insertAtCursor(`${before}${placeholder}${after}`);
+      return;
+    }
+    const start = textarea.selectionStart ?? current.length;
+    const end = textarea.selectionEnd ?? current.length;
+    const selected = current.slice(start, end) || placeholder;
+    const next = `${current.slice(0, start)}${before}${selected}${after}${current.slice(end)}`;
+    onChange({ ...content, markdown: next });
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+    });
+  };
+
+  /** 行首加前缀：标题、引用、列表；对选中的每一行都生效 */
+  const applyLinePrefix = (prefix: string) => {
+    const textarea = textareaRef.current;
+    const current = content.markdown;
+    if (!textarea) {
+      insertAtCursor(`\n${prefix}`);
+      return;
+    }
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? start;
+    const from = current.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const nextBreak = current.indexOf('\n', end);
+    const to = nextBreak === -1 ? current.length : nextBreak;
+    const block = current.slice(from, to);
+    // 已经带该前缀则取消，实现「再点一次还原」
+    const lines = block.split('\n');
+    const allPrefixed = lines.every((line) => line.startsWith(prefix));
+    const replaced = lines
+      .map((line) => (allPrefixed ? line.slice(prefix.length) : `${prefix}${line}`))
+      .join('\n');
+    onChange({ ...content, markdown: `${current.slice(0, from)}${replaced}${current.slice(to)}` });
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(from, from + replaced.length);
+    });
+  };
+
   const insertMindmap = () => {
     const mindmap = createEmbeddedMindmap();
     insertAtCursor(`\n[[mindmap:${mindmap.id}]]\n`);
@@ -88,17 +134,80 @@ export function MarkdownEditor({ content, canWrite, documentId, shareToken, onCh
     <div className={mdStyles.wrap}>
       {canWrite ? (
         <div className={mdStyles.toolbar}>
+          <select
+            className={mdStyles.select}
+            value=""
+            title="段落样式"
+            onChange={(event) => {
+              const prefix = event.target.value;
+              if (prefix) applyLinePrefix(prefix);
+              event.target.value = '';
+            }}
+          >
+            <option value="">段落样式</option>
+            <option value="# ">标题 1</option>
+            <option value="## ">标题 2</option>
+            <option value="### ">标题 3</option>
+            <option value="> ">引用</option>
+          </select>
+
+          <span className={mdStyles.divider} />
+
+          <button type="button" className={mdStyles.tool} title="加粗 (Ctrl+B)" onClick={() => applyInline('**', '**', '粗体')}>
+            <strong>B</strong>
+          </button>
+          <button type="button" className={mdStyles.tool} title="斜体 (Ctrl+I)" onClick={() => applyInline('*', '*', '斜体')}>
+            <em>I</em>
+          </button>
+          <button type="button" className={mdStyles.tool} title="删除线" onClick={() => applyInline('~~', '~~', '删除线')}>
+            <s>S</s>
+          </button>
+          <button type="button" className={mdStyles.tool} title="行内代码" onClick={() => applyInline('`', '`', 'code')}>
+            {'</>'}
+          </button>
+
+          <span className={mdStyles.divider} />
+
+          <button type="button" className={mdStyles.tool} title="无序列表" onClick={() => applyLinePrefix('- ')}>
+            • 列表
+          </button>
+          <button type="button" className={mdStyles.tool} title="有序列表" onClick={() => applyLinePrefix('1. ')}>
+            1. 列表
+          </button>
+          <button type="button" className={mdStyles.tool} title="任务清单" onClick={() => applyLinePrefix('- [ ] ')}>
+            ☐ 待办
+          </button>
+
+          <span className={mdStyles.divider} />
+
+          <button type="button" className={mdStyles.tool} title="插入链接" onClick={() => applyInline('[', '](https://)', '链接文字')}>
+            链接
+          </button>
           <button
             type="button"
-            className={`${styles.button} ${styles.buttonSm}`}
+            className={mdStyles.tool}
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
+            title="插入图片"
           >
-            {uploading ? '上传中…' : '🖼️ 插入图片'}
+            {uploading ? '上传中…' : '图片'}
           </button>
-          <button type="button" className={`${styles.button} ${styles.buttonSm}`} onClick={insertMindmap}>
-            🧠 插入思维导图
+          <button type="button" className={mdStyles.tool} title="插入表格" onClick={() => insertAtCursor('\n| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |\n')}>
+            表格
           </button>
+          <button type="button" className={mdStyles.tool} title="代码块" onClick={() => insertAtCursor('\n```\n// 代码\n```\n')}>
+            代码块
+          </button>
+          <button type="button" className={mdStyles.tool} title="分割线" onClick={() => insertAtCursor('\n---\n')}>
+            分割线
+          </button>
+
+          <span className={mdStyles.divider} />
+
+          <button type="button" className={mdStyles.tool} onClick={insertMindmap} title="插入可编辑的思维导图">
+            思维导图
+          </button>
+
           <input
             ref={fileInputRef}
             type="file"

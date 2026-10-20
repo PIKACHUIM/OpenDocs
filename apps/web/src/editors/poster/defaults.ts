@@ -5,7 +5,7 @@
  * 移植自 poster-design (https://github.com/palxiao/poster-design, AGPL-3.0-or-later)：
  *   widgets/wText/wTextSetting.ts、wImage/wImageSetting.ts、wSvg/wSvgSetting.ts、wQrcode/wQrcodeSetting.ts
  */
-import type { ImageWidget, QrcodeWidget, SvgWidget, TextWidget } from './model';
+import type { BrushWidget, ImageWidget, QrcodeWidget, SvgWidget, TextWidget } from './model';
 
 export function makeText(partial?: Partial<TextWidget>): TextWidget {
   return {
@@ -84,6 +84,26 @@ export function makeSvg(partial?: Partial<SvgWidget>): SvgWidget {
     svgUrl: '',
     colors: [],
     record: { width: 0, height: 0, minWidth: 10, minHeight: 10 },
+    ...partial,
+  };
+}
+
+export function makeBrush(partial?: Partial<BrushWidget>): BrushWidget {
+  return {
+    name: '画笔',
+    type: 'w-brush',
+    uuid: '-1',
+    width: 100,
+    height: 100,
+    left: 0,
+    top: 0,
+    rotate: 0,
+    opacity: 1,
+    parent: '-1',
+    points: [],
+    color: '#1b1f24',
+    strokeWidth: 4,
+    record: { width: 0, height: 0, minWidth: 1, minHeight: 1 },
     ...partial,
   };
 }

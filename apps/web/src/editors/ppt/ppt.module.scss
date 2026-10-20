@@ -292,6 +292,58 @@ $bg: #f2f3f5;
   background: #fff;
 }
 
+// 翻页热区：左侧 1/3 上一页，右侧 2/3 下一页
+.presentZonePrev,
+.presentZoneNext {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.presentZonePrev {
+  left: 0;
+  width: 33%;
+}
+
+.presentZoneNext {
+  right: 0;
+  width: 67%;
+}
+
+// 黑屏（B 键切换）
+.presentBlackout {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: #000;
+  cursor: pointer;
+}
+
+// 底部进度条
+.presentProgress {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  z-index: 6;
+
+  span {
+    display: block;
+    height: 100%;
+    background: #3370ff;
+    transition: width 0.25s ease;
+  }
+}
+
+.presentHint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 // 放映时的演讲者备注（左下角，不进入画布）
 .presentNotes {
   position: fixed;

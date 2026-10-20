@@ -144,7 +144,25 @@ export interface GroupWidget extends WidgetBase {
   isContainer: true;
 }
 
-export type Widget = TextWidget | ImageWidget | SvgWidget | QrcodeWidget | GroupWidget;
+/**
+ * 自由画笔（OpenDocs 扩展，对应 excalidraw / miniPaint 的铅笔工具）。
+ * points 是相对元素左上角的坐标；导出与预览共用同一条路径。
+ */
+export interface BrushWidget extends WidgetBase {
+  type: 'w-brush';
+  points: Array<[number, number]>;
+  color: string;
+  /** 线宽（设计稿像素）；元素自身的 width/height 是包围盒 */
+  strokeWidth: number;
+}
+
+export type Widget =
+  | TextWidget
+  | ImageWidget
+  | SvgWidget
+  | QrcodeWidget
+  | GroupWidget
+  | BrushWidget;
 export type WidgetType = Widget['type'];
 
 /** 一页：画布设置 + 图层列表（原项目 dLayouts[i]） */

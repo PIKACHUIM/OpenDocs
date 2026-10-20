@@ -845,7 +845,7 @@ export function AdminPage() {
         ) : null}
 
         {tab === 'settings' && settingsForm ? (
-          <div className={styles.listWrap} style={{ padding: 20, maxWidth: 560 }}>
+          <div className={styles.listWrap} style={{ padding: 20 }}>
             <div className={styles.field}>
               <span className={styles.label}>站点名称</span>
               <input

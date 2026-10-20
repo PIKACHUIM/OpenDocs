@@ -196,6 +196,22 @@ async function drawWidget(ctx: CanvasRenderingContext2D, widget: Widget, parent:
   if (widget.rotate) ctx.rotate((widget.rotate * Math.PI) / 180);
   ctx.translate(-widget.width / 2, -widget.height / 2);
 
+  if (widget.type === 'w-brush') {
+    if (widget.points.length >= 2) {
+      ctx.beginPath();
+      widget.points.forEach(([px, py], index) => {
+        if (index === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = toCssColor(widget.color);
+      ctx.lineWidth = widget.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   if (widget.type === 'w-text') drawText(ctx, widget);
   else if (widget.type === 'w-image' || widget.type === 'w-svg') await drawImageLayer(ctx, widget);
   else if (widget.type === 'w-qrcode') await drawQrcode(ctx, widget);

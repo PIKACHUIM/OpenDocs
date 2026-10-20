@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Moveable, { type OnResize, type OnResizeEnd } from 'react-moveable';
 import Selecto from 'react-selecto';
+import { makeBrush } from './defaults';
 import { Layer } from './Layer';
 import { usePosterStore } from './store';
 import type { TextWidget, Widget } from './model';
@@ -31,7 +32,21 @@ function directionsFor(widget: Widget | null): string[] {
   }
 }
 
-export function PosterCanvas() {
+export interface PosterCanvasProps {
+  /** 画笔模式：在画布上按住拖动即可绘制 */
+  drawMode?: boolean;
+  brushColor?: string;
+  brushWidth?: number;
+  /** 画完一笔后回调，通常用于退出画笔模式 */
+  onStrokeDone?: () => void;
+}
+
+export function PosterCanvas({
+  drawMode = false,
+  brushColor = '#1b1f24',
+  brushWidth = 4,
+  onStrokeDone,
+}: PosterCanvasProps = {}) {
   const layouts = usePosterStore((s) => s.layouts);
   const currentPage = usePosterStore((s) => s.currentPage);
   const selected = usePosterStore((s) => s.selected);
@@ -41,6 +56,7 @@ export function PosterCanvas() {
   const page = layouts[currentPage].global;
   const widgets = layouts[currentPage].layers;
 
+  const addWidget = usePosterStore((s) => s.addWidget);
   const select = usePosterStore((s) => s.select);
   const selectMany = usePosterStore((s) => s.selectMany);
   const updateWidget = usePosterStore((s) => s.updateWidget);
@@ -95,6 +111,9 @@ export function PosterCanvas() {
   }, [widgets, zoom, selected]);
 
   // 把缩放后的拖拽位移还原为设计坐标
+  /** 当前笔画收集中的点（设计坐标） */
+  const strokeRef = useRef<Array<[number, number]> | null>(null);
+
   const holdPosition = useRef<{ left: number; top: number } | null>(null);
   const resizeBase = useRef<{
     fontSize: number;
@@ -167,6 +186,62 @@ export function PosterCanvas() {
             />
           );
         })}
+
+        {/* 画笔层：盖在图层之上收集笔画，画完转成一个画笔元素 */}
+        {drawMode ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 30,
+              cursor: 'crosshair',
+              touchAction: 'none',
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              strokeRef.current = [
+                [(event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale],
+              ];
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!strokeRef.current) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              strokeRef.current.push([
+                (event.clientX - rect.left) / scale,
+                (event.clientY - rect.top) / scale,
+              ]);
+            }}
+            onPointerUp={() => {
+              const points = strokeRef.current;
+              strokeRef.current = null;
+              if (!points || points.length < 2) return;
+              const xs = points.map(([x]) => x);
+              const ys = points.map(([, y]) => y);
+              const pad = brushWidth / 2 + 2;
+              const left = Math.min(...xs) - pad;
+              const top = Math.min(...ys) - pad;
+              const width = Math.max(...xs) - Math.min(...xs) + pad * 2;
+              const height = Math.max(...ys) - Math.min(...ys) + pad * 2;
+              addWidget(
+                makeBrush({
+                  left: Math.round(left),
+                  top: Math.round(top),
+                  width: Math.max(2, Math.round(width)),
+                  height: Math.max(2, Math.round(height)),
+                  color: brushColor,
+                  strokeWidth: brushWidth,
+                  points: points.map(([x, y]) => [
+                    Math.round((x - left) * 10) / 10,
+                    Math.round((y - top) * 10) / 10,
+                  ]),
+                })
+              );
+              onStrokeDone?.();
+            }}
+          />
+        ) : null}
       </div>
 
       {/* 选择框：点击选中，Shift 多选 */}
