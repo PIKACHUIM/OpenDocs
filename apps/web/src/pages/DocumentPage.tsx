@@ -2,6 +2,7 @@ import { Suspense, lazy, useMemo, useState } from 'react';
 import type { DocumentContent, ExcelContent, MarkdownContent, MindmapContent, PptContent, WordContent } from '../api';
 import { DocumentShell } from '../editors/DocumentShell';
 import { useDocumentSession } from '../lib/document-session';
+import { navigate } from '../lib/router';
 import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import styles from '../ui/common.module.scss';
 
@@ -46,6 +47,12 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
 
   const { document, content, canWrite } = session;
   const title = document.title;
+
+  // 图片文档有自己的画布布局（无 DocumentShell），统一跳到图片编辑页的云端模式
+  if (document.type === 'image' && kind === 'document') {
+    navigate(`/image?id=${document.id}`);
+    return <div className={styles.center}>正在打开图片编辑器…</div>;
+  }
 
   const runExport = async (task: () => Promise<void> | void) => {
     setExporting(true);

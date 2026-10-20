@@ -83,6 +83,12 @@ export interface SlideTextElement extends SlideElementBase {
   color: string;
   bold: boolean;
   align: 'left' | 'center' | 'right';
+  /** 行高倍数，默认 1.35 */
+  lineHeight?: number;
+  /** 是否显示项目符号 */
+  bullet?: boolean;
+  /** 文本框内边距（设计稿像素） */
+  padding?: number;
 }
 
 export interface SlideShapeElement extends SlideElementBase {
@@ -122,7 +128,23 @@ export interface PptContent {
 export const SLIDE_WIDTH = 1280;
 export const SLIDE_HEIGHT = 720;
 
-export type DocumentContent = MindmapContent | MarkdownContent | WordContent | ExcelContent | PptContent;
+export interface ImageContent {
+  type: 'image';
+  version: number;
+  width: number;
+  height: number;
+  background: string;
+  /** 图层结构由图片编辑器自身维护 */
+  layers: unknown[];
+}
+
+export type DocumentContent =
+  | MindmapContent
+  | MarkdownContent
+  | WordContent
+  | ExcelContent
+  | PptContent
+  | ImageContent;
 
 export function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -148,6 +170,15 @@ export function emptyContentFor(type: DocumentType): DocumentContent {
         type,
         version: 1,
         sheets: [{ id: 'sheet-1', name: 'Sheet1', celldata: [], row: 84, column: 26 }],
+      };
+    case 'image':
+      return {
+        type,
+        version: 1,
+        width: 1080,
+        height: 1440,
+        background: '#f5f6f8',
+        layers: [],
       };
     case 'ppt':
       return {

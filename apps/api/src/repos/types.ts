@@ -68,7 +68,7 @@ export interface AuthTokenRecord {
 }
 
 /** 文档类型：对应 5 种在线编辑器 */
-export type DocumentType = 'mindmap' | 'markdown' | 'word' | 'excel' | 'ppt';
+export type DocumentType = 'mindmap' | 'markdown' | 'word' | 'excel' | 'ppt' | 'image';
 
 export type LinkShareMode = 'view' | 'edit';
 

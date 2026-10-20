@@ -77,7 +77,13 @@ async function buildSlide(pptx: PptxGenJS, data: PptSlide) {
     };
 
     if (element.type === 'text') {
-      slide.addText(element.text, {
+      const text = element.bullet
+        ? element.text
+            .split('\n')
+            .map((line) => (line.trim() ? `• ${line}` : line))
+            .join('\n')
+        : element.text;
+      slide.addText(text, {
         ...box,
         fontSize: Math.max(8, element.fontSize * PT),
         color: hex(element.color, '1B1F24'),

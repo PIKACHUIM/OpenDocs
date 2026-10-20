@@ -422,6 +422,12 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
 
   const renderElement = (element: SlideElement) => {
     if (element.type === 'text') {
+      const body = element.bullet
+        ? element.text
+            .split('\n')
+            .map((line) => (line.trim() ? `• ${line}` : line))
+            .join('\n')
+        : element.text;
       return (
         <div
           style={{
@@ -431,12 +437,14 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             fontSize: element.fontSize * scale,
             fontWeight: element.bold ? 700 : 400,
             textAlign: element.align,
-            lineHeight: 1.35,
+            lineHeight: element.lineHeight ?? 1.35,
+            padding: (element.padding ?? 0) * scale,
+            boxSizing: 'border-box',
             whiteSpace: 'pre-wrap',
             pointerEvents: 'none',
           }}
         >
-          {element.text}
+          {body}
         </div>
       );
     }
@@ -833,6 +841,45 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                   >
                     {selected.bold ? '取消加粗' : '加粗'}
                   </button>
+                  <button
+                    type="button"
+                    className={styles.propButton}
+                    onClick={() => patchElement(selected.id, { bullet: !selected.bullet } as never)}
+                  >
+                    {selected.bullet ? '取消项目符号' : '项目符号'}
+                  </button>
+                </div>
+
+                <div className={styles.propField}>
+                  <span>行高 / 内边距</span>
+                  <div className={styles.propRow}>
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      step={0.05}
+                      min={1}
+                      max={3}
+                      value={selected.lineHeight ?? 1.35}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, {
+                          lineHeight: Number(event.target.value) || 1.35,
+                        } as never)
+                      }
+                    />
+                    <input
+                      className={styles.propInput}
+                      type="number"
+                      min={0}
+                      value={selected.padding ?? 0}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        patchElement(selected.id, {
+                          padding: Number(event.target.value) || 0,
+                        } as never)
+                      }
+                    />
+                  </div>
                 </div>
               </>
             ) : null}

@@ -31,6 +31,7 @@ const TYPE_META: Record<DocumentType, { label: string; badge: string; fg: string
   word: { label: 'Word 文档', badge: 'W', fg: '#1a56c4', bg: '#eaf1fe' },
   excel: { label: 'Excel 表格', badge: 'X', fg: '#0f7b45', bg: '#e9f7ef' },
   ppt: { label: '演示文稿', badge: 'P', fg: '#c2500f', bg: '#fdf0e8' },
+  image: { label: '图片', badge: '图', fg: '#b5487a', bg: '#fdeff5' },
 };
 
 type Scope = 'recent' | 'owned' | 'shared' | 'sent' | 'starred' | 'trash';

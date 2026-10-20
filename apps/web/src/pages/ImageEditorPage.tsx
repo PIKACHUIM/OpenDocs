@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import localforage from 'localforage';
+import { ApiError, documentApi, type ImageContent } from '../api';
 import { navigate } from '../lib/router';
 import { AssetPicker } from '../ui/AssetPicker';
 import styles from '../ui/common.module.scss';
@@ -88,38 +89,98 @@ export function ImageEditorPage() {
 
   // 自动保存：图片编辑目前是独立工具页，草稿存浏览器（刷新/重开不丢）。
   // 云端文档化需要新增文档类型，属于后续改造。
+  // 带 ?id= 时编辑云端文档；否则是本地草稿（免登录试用）
+  const docId = useMemo(() => new URLSearchParams(window.location.search).get('id'), []);
+  const versionRef = useRef(1);
+  const [docTitle, setDocTitle] = useState('未命名图片');
+  const [creating, setCreating] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const draft = await localforage.getItem<{
-        size: { w: number; h: number };
-        background: string;
-        layers: Layer[];
-      }>(IMAGE_DRAFT_KEY);
-      if (cancelled) return;
-      if (draft) {
-        setSize(draft.size);
-        setBackground(draft.background);
-        setLayers(draft.layers);
+      if (docId) {
+        try {
+          const data = await documentApi.get(docId);
+          if (cancelled) return;
+          const content = data.content as unknown as ImageContent;
+          setSize({ w: content.width ?? 1080, h: content.height ?? 1440 });
+          setBackground(content.background ?? '#f5f6f8');
+          setLayers((content.layers ?? []) as Layer[]);
+          setDocTitle(data.document.title);
+          versionRef.current = data.document.version;
+        } catch {
+          // 加载失败退回空白画布
+        }
+      } else {
+        const draft = await localforage.getItem<{
+          size: { w: number; h: number };
+          background: string;
+          layers: Layer[];
+        }>(IMAGE_DRAFT_KEY);
+        if (cancelled) return;
+        if (draft) {
+          setSize(draft.size);
+          setBackground(draft.background);
+          setLayers(draft.layers);
+        }
       }
       setDraftReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [docId]);
 
   useEffect(() => {
     if (!draftReady) return;
     setSaveState('saving');
     const timer = window.setTimeout(() => {
+      if (docId) {
+        const content: ImageContent = {
+          type: 'image',
+          version: 1,
+          width: size.w,
+          height: size.h,
+          background,
+          layers: layers as unknown[],
+        };
+        void documentApi
+          .save(docId, { content, baseVersion: versionRef.current })
+          .then((result) => {
+            versionRef.current = result.document.version;
+            setSaveState('saved');
+          })
+          .catch(() => setSaveState('idle'));
+        return;
+      }
       void localforage
         .setItem(IMAGE_DRAFT_KEY, { size, background, layers })
         .then(() => setSaveState('saved'))
         .catch(() => setSaveState('idle'));
-    }, 500);
+    }, 600);
     return () => window.clearTimeout(timer);
-  }, [draftReady, size, background, layers]);
+  }, [draftReady, docId, size, background, layers]);
+
+  /** 把本地草稿另存为云端图片文档 */
+  const saveToAccount = async () => {
+    setCreating(true);
+    try {
+      const content: ImageContent = {
+        type: 'image',
+        version: 1,
+        width: size.w,
+        height: size.h,
+        background,
+        layers: layers as unknown[],
+      };
+      const data = await documentApi.create({ type: 'image', title: '未命名图片', content });
+      navigate(`/image?id=${data.document.id}`);
+    } catch (error) {
+      window.alert(error instanceof ApiError ? error.message : '保存失败');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   // 预览按容器宽度等比缩放
   const [scale, setScale] = useState(0.4);
@@ -426,11 +487,27 @@ export function ImageEditorPage() {
         <button type="button" className={`${styles.button} ${styles.buttonGhost}`} onClick={() => navigate('/')}>
           ← 返回
         </button>
-        <span className={styles.imageTitle}>图片编辑</span>
+        <span className={styles.imageTitle}>{docId ? docTitle : '图片编辑'}</span>
         <span className={styles.hint} style={{ marginLeft: 8 }}>
-          {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已自动保存到本地' : ''}
+          {saveState === 'saving'
+            ? '保存中…'
+            : saveState === 'saved'
+              ? docId
+                ? '已保存到云端'
+                : '已自动保存到本地'
+              : ''}
         </span>
         <span className={styles.grow} />
+        {docId ? null : (
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary}`}
+            disabled={creating}
+            onClick={saveToAccount}
+          >
+            {creating ? '保存中…' : '保存到我的文档'}
+          </button>
+        )}
         <button type="button" className={styles.button} onClick={() => applyTemplate('cover')}>
           封面模板
         </button>

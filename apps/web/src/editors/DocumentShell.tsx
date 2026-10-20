@@ -13,6 +13,7 @@ const TYPE_ICON: Record<DocumentType, string> = {
   word: 'W',
   excel: 'X',
   ppt: 'P',
+  image: '图',
 };
 
 interface DocumentShellProps {

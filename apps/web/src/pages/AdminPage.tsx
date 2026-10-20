@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<DocumentType, string> = {
   word: 'Word',
   excel: 'Excel',
   ppt: 'PPT',
+  image: '图片',
 };
 
 function formatBytes(bytes: number): string {

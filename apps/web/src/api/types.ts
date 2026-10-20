@@ -1,5 +1,5 @@
 export type UserRole = 'user' | 'admin';
-export type DocumentType = 'mindmap' | 'markdown' | 'word' | 'excel' | 'ppt';
+export type DocumentType = 'mindmap' | 'markdown' | 'word' | 'excel' | 'ppt' | 'image';
 export type LinkShareMode = 'view' | 'edit';
 export type DocumentMemberRole = 'viewer' | 'editor';
 export type DocumentAccess = 'owner' | 'editor' | 'viewer' | 'none';

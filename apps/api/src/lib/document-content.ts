@@ -21,6 +21,7 @@ const REQUIRED_FIELD: Record<DocumentType, string> = {
   word: 'doc',
   excel: 'sheets',
   ppt: 'slides',
+  image: 'layers',
 };
 
 export function normalizeDocumentContent(
@@ -63,6 +64,8 @@ export function summarizeContent(content: DocumentContentEnvelope): number {
       return Array.isArray(content.sheets) ? content.sheets.length : 0;
     case 'ppt':
       return Array.isArray(content.slides) ? content.slides.length : 0;
+    case 'image':
+      return Array.isArray(content.layers) ? content.layers.length : 0;
     case 'word':
       return 0;
     default:
@@ -78,6 +81,15 @@ export function emptyContentFor(type: DocumentType): DocumentContentEnvelope {
       return { type, version: 1, markdown: '' };
     case 'word':
       return { type, version: 1, doc: { type: 'doc', content: [{ type: 'paragraph' }] } };
+    case 'image':
+      return {
+        type,
+        version: 1,
+        width: 1080,
+        height: 1440,
+        background: '#f5f6f8',
+        layers: [],
+      };
     case 'excel':
       return {
         type,

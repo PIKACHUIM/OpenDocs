@@ -31,7 +31,7 @@ import {
 export const documentRoutes = new Hono<ApiEnv>();
 documentRoutes.use('*', requireAuth);
 
-const DOCUMENT_TYPES: DocumentType[] = ['mindmap', 'markdown', 'word', 'excel', 'ppt'];
+const DOCUMENT_TYPES: DocumentType[] = ['mindmap', 'markdown', 'word', 'excel', 'ppt', 'image'];
 
 function assertType(type: unknown): DocumentType {
   if (typeof type !== 'string' || !DOCUMENT_TYPES.includes(type as DocumentType)) {
