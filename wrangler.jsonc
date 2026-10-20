@@ -54,6 +54,9 @@
 	"vars": {
 		// 首个注册的账号自动成为管理员；生产环境建议部署完成后改为 "false"
 		"BOOTSTRAP_FIRST_ADMIN": "true",
-		"ALLOW_REGISTRATION": "true"
+		"ALLOW_REGISTRATION": "true",
+		// 邮件里的绝对链接基准：不配置会回退到请求 Host，存在被伪造的风险
+		"SITE_URL": "https://road.oplist.org",
+		"ALLOWED_HOSTS": "road.oplist.org"
 	}
 }

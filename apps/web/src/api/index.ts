@@ -132,6 +132,12 @@ export const documentApi = {
   duplicate: (id: string) =>
     api<{ document: ApiDocument }>(`/documents/${id}/duplicate`, { method: 'POST' }),
 
+  /** 清理超过保留期的回收站条目（写操作，必须是 POST） */
+  purgeTrash: () =>
+    api<{ ok: boolean; removed: number; retentionDays: number }>('/documents/purge-trash', {
+      method: 'POST',
+    }),
+
   createShareLink: (id: string, mode: LinkShareMode) =>
     api<{ share: { token: string; mode: LinkShareMode; path: string }; document: ApiDocument }>(
       `/documents/${id}/share-link`,

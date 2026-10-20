@@ -14,6 +14,7 @@
 import katex from 'katex';
 import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
+import DOMPurify from 'dompurify';
 import type {
   SlideAudioElement,
   SlideChartElement,
@@ -399,17 +400,32 @@ export function ChartView({ element, scale }: { element: SlideChartElement; scal
 
 // ------------------------------------------------------------------ 公式
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function LatexView({ element, scale }: { element: SlideLatexElement; scale: number }) {
-  // 用 katex 做真实公式排版；语法错误时降级为原文，避免整页渲染失败
+  // 用 katex 做真实公式排版；语法错误时降级为原文，避免整页渲染失败。
+  // 公式来自文档内容（可能是别人分享的），插入 DOM 前必须再净化一次：
+  // KaTeX 的 \href / \htmlClass 等命令在特定版本/配置下可能带出可执行内容。
   const html = useMemo(() => {
     try {
-      return katex.renderToString(element.latex || ' ', {
+      const rendered = katex.renderToString(element.latex || ' ', {
         throwOnError: false,
         displayMode: true,
         output: 'html',
+        trust: false,
+      });
+      return DOMPurify.sanitize(rendered, {
+        USE_PROFILES: { html: true, svg: true, mathMl: true },
       });
     } catch {
-      return element.latex;
+      return escapeHtml(element.latex ?? '');
     }
   }, [element.latex]);
 
@@ -506,13 +522,59 @@ export function AudioView({ element, scale }: { element: SlideAudioElement; scal
   );
 }
 
+/**
+ * 只允许嵌入「外部 http(s) 页面」。
+ *
+ * 同源地址必须拒绝：`/api/assets/<id>` 可能返回用户上传的 SVG，
+ * 而 iframe 的 sandbox 一旦同时给了 allow-scripts + allow-same-origin，
+ * 同源内容就能读到父页面并调同源 API（等于存储型 XSS）。
+ */
+function safeExternalSrc(src: string): string | null {
+  if (!src) return null;
+  try {
+    const url = new URL(src, window.location.origin);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (url.origin === window.location.origin) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function IframeView({ element }: { element: SlideIframeElement }) {
+  const src = useMemo(() => safeExternalSrc(element.src), [element.src]);
+
+  if (!src) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f2f3f5',
+          color: '#86909c',
+          fontSize: 13,
+          padding: 12,
+          textAlign: 'center',
+          boxSizing: 'border-box',
+        }}
+      >
+        该网页地址不可嵌入（仅支持外部 http/https 页面）
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#f2f3f5' }}>
       <iframe
-        src={element.src}
+        src={src}
         title="embedded"
-        sandbox="allow-scripts allow-same-origin allow-popups"
+        // 跨源页面保留 allow-same-origin 才能正常播放视频；同源已在上面拦掉，
+        // 因此这里不存在「同源 + 可脚本」的沙箱逃逸组合
+        sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+        referrerPolicy="no-referrer"
         style={{
           width: '100%',
           height: '100%',

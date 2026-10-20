@@ -53,6 +53,15 @@ export function normalizeDocumentContent(
   } as DocumentContentEnvelope;
 }
 
+/**
+ * 字符串的 UTF-8 字节数。
+ * 之前直接用 `serialized.length` 记录大小，对中文会少算约 3 倍
+ * （JS 的 length 是 UTF-16 码元数），列表里显示的「大小」因此偏小。
+ */
+export function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
 export function assertContentSize(serialized: string) {
   if (serialized.length > MAX_CONTENT_BYTES) {
     throw badRequest(

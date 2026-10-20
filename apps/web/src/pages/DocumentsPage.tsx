@@ -173,6 +173,12 @@ export function DocumentsPage() {
     setLoading(true);
     setError(null);
     try {
+      // 打开回收站时顺带清理过期条目：清理是写操作，必须显式 POST，
+      // 不能挂在 GET 列表上（预取/爬虫会把用户数据删掉）。
+      if (scope === 'trash') {
+        await documentApi.purgeTrash().catch(() => undefined);
+      }
+
       const params: Parameters<typeof documentApi.list>[0] = {
         page,
         pageSize: PAGE_SIZE,
@@ -453,6 +459,17 @@ export function DocumentsPage() {
           <DropdownItem onClick={() => restoreDocument(doc)}>恢复</DropdownItem>
           <DropdownItem onClick={() => removeDocument(doc, true)}>永久删除</DropdownItem>
         </>
+      ) : scope === 'sent' ? (
+        // 「我的分享」管理的是「分享关系」，不是文件本身：
+        // 只保留编辑、浏览、管理分享和删除
+        <>
+          <DropdownItem onClick={() => openDocument(doc)}>编辑</DropdownItem>
+          <DropdownItem onClick={() => navigate(`/d/${doc.id}?mode=view`)}>
+            以浏览模式打开
+          </DropdownItem>
+          <DropdownItem onClick={() => setShareTarget(doc)}>管理分享</DropdownItem>
+          <DropdownItem onClick={() => removeDocument(doc)}>删除</DropdownItem>
+        </>
       ) : (
         <>
           {/* 与右键菜单保持同一组操作，避免两处行为不一致 */}
@@ -513,8 +530,8 @@ export function DocumentsPage() {
           <span className={styles.permissionOff}>— 删除</span>
         )}
       </span>
+      <span className={styles.listSize}>{formatSize(doc.sizeBytes)}</span>
       <span className={styles.listRowActions} onClick={(event) => event.stopPropagation()}>
-        <span className={styles.listSize}>{formatSize(doc.sizeBytes)}</span>
         <button
           type="button"
           className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
@@ -804,6 +821,7 @@ export function DocumentsPage() {
                 <span>最近查看</span>
                 <span>权限</span>
                 <span style={{ textAlign: 'right' }}>大小</span>
+                <span style={{ textAlign: 'right' }}>操作</span>
               </div>
               {documents.map(renderListItem)}
             </div>
@@ -952,6 +970,53 @@ export function DocumentsPage() {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
         >
+          {scope === 'sent' ? (
+            <>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  setContextMenu(null);
+                  openDocument(menuDoc);
+                }}
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  setContextMenu(null);
+                  navigate(`/d/${menuDoc.id}?mode=view`);
+                }}
+              >
+                以浏览模式打开
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  setContextMenu(null);
+                  setShareTarget(menuDoc);
+                }}
+              >
+                管理分享
+              </button>
+              <button
+                type="button"
+                className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
+                onClick={() => {
+                  setContextMenu(null);
+                  void removeDocument(menuDoc);
+                }}
+              >
+                删除
+              </button>
+            </>
+          ) : null}
+
+          {scope !== 'sent' ? (
+            <>
           <button
             type="button"
             className={styles.contextMenuItem}
@@ -1033,6 +1098,8 @@ export function DocumentsPage() {
           >
             移到最近删除
           </button>
+            </>
+          ) : null}
         </div>
       ) : null}
 

@@ -32,7 +32,7 @@ export function createApp() {
     return errorResponse(error);
   });
   // 不回显用户可控的 path，避免反射内容/日志注入
-  app.notFound((c) => json({ error: '接口不存在', code: 'NOT_FOUND' }, 404));
+  app.notFound(() => json({ error: '接口不存在', code: 'NOT_FOUND' }, 404));
 
   // 同域部署时不需要 CORS；跨域调试可用 CORS_ORIGIN 显式放行
   app.use(
@@ -74,7 +74,7 @@ export function createApp() {
   app.use('*', withRuntime);
 
   // 健康检查只回 ok：存储后端（d1+r2 / node-sqlite+disk）属于部署内部信息
-  app.get('/api/health', (c) => json({ ok: true }));
+  app.get('/api/health', () => json({ ok: true }));
 
   app.route('/api/auth', authRoutes);
   app.route('/api/documents', documentRoutes);

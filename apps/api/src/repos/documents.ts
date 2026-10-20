@@ -154,6 +154,13 @@ export function createDocumentRepo(sql: SqlClient) {
     return { status: 'ok', document: await getById(id) };
   };
 
+  /**
+   * 修正历史文档的大小。
+   * 旧版本用字符串 length 记录，中文偏小；打开时按真实字节数补写一次。
+   */
+  const setSize = (id: string, sizeBytes: number) =>
+    sql.run('UPDATE documents SET size_bytes = ? WHERE id = ?', [sizeBytes, id]);
+
   const rename = async (id: string, title: string): Promise<DocumentRecord | null> => {
     await sql.run('UPDATE documents SET title = ?, updated_at = ? WHERE id = ?', [
       title.trim() || '未命名文档',
@@ -425,6 +432,7 @@ export function createDocumentRepo(sql: SqlClient) {
     getActive,
     create,
     commitContent,
+    setSize,
     rename,
     softDelete,
     restore,

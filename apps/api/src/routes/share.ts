@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ApiEnv } from '../context';
-import { assertContentSize, emptyContentFor, normalizeDocumentContent } from '../lib/document-content';
+import { assertContentSize, emptyContentFor, normalizeDocumentContent, utf8ByteLength } from '../lib/document-content';
 import { getText } from '../files';
 import { pendingContentKey } from '../repos/documents';
 import { badRequest, forbidden, json, notFound, readJson } from '../lib/http';
@@ -47,7 +47,7 @@ shareRoutes.put('/:token', async (c) => {
   const pendingKey = pendingContentKey(document.id);
   await c.get('runtime').files.put(pendingKey, serialized, 'application/json');
   const result = await c.get('repos').documents.commitContent(document.id, {
-    sizeBytes: serialized.length,
+    sizeBytes: utf8ByteLength(serialized),
     baseVersion,
     // 匿名访客没有 userId，仅记录「最近一次是匿名编辑」
     editedBy: null,

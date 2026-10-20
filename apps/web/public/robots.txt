@@ -1,13 +1,8 @@
-id: robots-txt
-name: Robots.txt
-type: code.txt
-content: |-
-  User-agent: *
-  Allow: /
-  
-  # 禁止访问管理后台
-  Disallow: /admin/
-  Disallow: /private/
-  
-  # 站点地图
-  Sitemap: https://drawnix.com/sitemap.xml
+User-agent: *
+Allow: /
+
+# 管理后台与接口不需要被搜索引擎收录
+Disallow: /admin
+Disallow: /api/
+# 分享链接不进入索引，避免私密文档被搜索引擎抓到
+Disallow: /s/

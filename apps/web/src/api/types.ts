@@ -81,7 +81,8 @@ export interface ApiTeam {
   maxImageBytes: number;
   maxFileBytes: number;
   readonly: boolean;
-  inviteToken: string | null;
+  /** 是否已生成邀请令牌；令牌明文只在「生成/重置」响应里返回一次 */
+  inviteEnabled: boolean;
   defaultCanCreate: boolean;
   defaultCanUpdate: boolean;
   defaultCanDelete: boolean;

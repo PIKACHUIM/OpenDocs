@@ -46,6 +46,11 @@
 		"BOOTSTRAP_FIRST_ADMIN": "true",
 		"ALLOW_REGISTRATION": "true",
 		// 开启后注册必须填写有效邀请码
-		"INVITE_REQUIRED": "false"
+		"INVITE_REQUIRED": "false",
+		// 站点绝对地址：验证邮箱 / 找回密码的邮件链接用它拼接。
+		// 不配置会回退到请求域名（Host 头），安全性与可送达性都更差，生产环境务必填。
+		"SITE_URL": "https://docs.example.com",
+		// 可选的 Host 白名单（逗号分隔）：未配置 SITE_URL 时，只有这里的域名能生成邮件链接
+		"ALLOWED_HOSTS": "docs.example.com"
 	}
 }

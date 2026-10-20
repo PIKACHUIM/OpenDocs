@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { randomId } from '../lib/crypto';
-import { canRead, resolvePermissions } from '../lib/access';
+import { resolvePermissions } from '../lib/access';
 import {
   badRequest,
   clientIp,
@@ -316,7 +316,7 @@ assetRoutes.get('/:id', async (c) => {
       folderPermissions,
       viaLinkMode: document.link_mode,
     });
-    if (!canRead(permissions)) throw forbidden('没有权限访问该文件');
+    if (!permissions.canRead) throw forbidden('没有权限访问该文件');
   } else if (asset.owner_id) {
     if (!user || (user.id !== asset.owner_id && user.role !== 'admin')) {
       throw forbidden('没有权限访问该文件');

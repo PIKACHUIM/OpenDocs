@@ -745,6 +745,26 @@ console.log('\n[12] 用户选择器与团队管理员');
   await call('DELETE', `/api/admin/teams/${teamId}`);
 }
 
+console.log('\n[13] 文档大小按 UTF-8 字节统计');
+{
+  cookie = adminCookie;
+  const text = '中文内容测试'.repeat(50); // 300 个汉字 ≈ 900 字节
+  const created = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '大小测试',
+    content: { type: 'markdown', version: 1, markdown: text, mindmaps: {} },
+  });
+  const bytes = created.data?.document?.sizeBytes ?? 0;
+  check('新建文档按字节记录大小', bytes > 900, bytes);
+
+  const opened = await call('GET', `/api/documents/${created.data?.document?.id}`);
+  check(
+    '打开后大小保持一致',
+    Math.abs((opened.data?.document?.sizeBytes ?? 0) - bytes) <= 8,
+    opened.data?.document?.sizeBytes
+  );
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));

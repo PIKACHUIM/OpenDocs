@@ -5,6 +5,7 @@ import { permissionsToAccess, resolvePermissions } from '../lib/access';
 import {
   assertContentSize,
   emptyContentFor,
+  utf8ByteLength,
   normalizeDocumentContent,
   summarizeContent,
 } from '../lib/document-content';
@@ -292,7 +293,7 @@ documentRoutes.post('/', async (c) => {
     const team = await c.get('repos').teams.getById(teamId);
     if (team && team.quota_bytes > 0) {
       const stats = await c.get('repos').teams.stats(team.id);
-      if (stats.usedBytes + serialized.length > team.quota_bytes) {
+      if (stats.usedBytes + utf8ByteLength(serialized) > team.quota_bytes) {
         throw badRequest('该团队空间容量已满，请联系管理员扩容');
       }
     }
@@ -302,7 +303,7 @@ documentRoutes.post('/', async (c) => {
     ownerId: user.id,
     type,
     title,
-    sizeBytes: serialized.length,
+    sizeBytes: utf8ByteLength(serialized),
     folderId,
     teamId,
   });
@@ -316,6 +317,16 @@ documentRoutes.get('/:id', async (c) => {
   if (!permissions.canRead) throw forbidden('没有权限访问该文档');
 
   const raw = await getText(c.get('runtime').files, document.content_key);
+
+  // 打开时顺手修正历史大小：旧数据按字符数记录（中文偏小），且从未保存过的是 0
+  if (raw) {
+    const actual = utf8ByteLength(raw);
+    if (actual > 0 && actual !== document.size_bytes) {
+      await c.get('repos').documents.setSize(document.id, actual);
+      document.size_bytes = actual;
+    }
+  }
+
   const owner = await c.get('repos').users.getById(document.owner_id);
 
   // 记录「最近打开」。只有所有者自己的视角才更新，避免别人打开你的文档改变你的排序
@@ -354,7 +365,7 @@ documentRoutes.put('/:id', async (c) => {
   await c.get('runtime').files.put(pendingKey, serialized, 'application/json');
 
   const result = await c.get('repos').documents.commitContent(document.id, {
-    sizeBytes: serialized.length,
+    sizeBytes: utf8ByteLength(serialized),
     // 标题属于「所有者自己的组织方式」，协作者只能改内容
     title: access === 'owner' ? optionalString(body.title, 120) : undefined,
     baseVersion,

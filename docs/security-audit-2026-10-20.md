@@ -410,6 +410,31 @@ PORT=8799 SQLITE_FILE=.data/audit.sqlite node dist/audit-api.mjs
 
 ---
 
+## 9. 修复记录（2026-10-20 当日闭环）
+
+| 编号 | 状态 | 落地方式 |
+| --- | --- | --- |
+| H-1 SVG/iframe XSS | 已修 | `routes/assets.ts`：魔数校验 + SVG 危险特征拒绝（`UNSAFE_SVG`）+ 响应加 `nosniff`/`CSP: sandbox`/短缓存；`PptElements.tsx`：`IframeView` 只允许外部 http(s)（同源一律拒绝）、KaTeX 输出过 DOMPurify |
+| H-2 团队令牌下发 | 已修 | 令牌改为 SHA-256 存 `invite_token_hash`（迁移 `0003`），`toPublicTeam` 只返回 `inviteEnabled`；明文仅在生成/重置响应出现一次 |
+| H-3 配额/团队策略失效 | 已修 | 上传链路校验 `userQuotaBytes` / `systemQuotaBytes` / 团队 `quota_bytes`+`allow_image`+`max_image_bytes`，并加用户/IP 双维度上传限流 |
+| M-1 乐观锁覆盖 | 已修 | `documents.commitContent`：先写唯一 pending key，再用 `UPDATE … WHERE version=?` CAS 切指针；冲突时删除临时对象，旧内容零改动 |
+| M-2 无服务端限流 | 已修 | 新增 `lib/rate-limit.ts`，登录（IP+账号）、注册、找回密码（IP+邮箱）、验证/重置令牌、团队加入、用户检索、上传全部限流 |
+| M-3 登录时间侧信道 | 已修 | 账号不存在时跑一次等成本 PBKDF2（`DUMMY_PASSWORD_HASH`），并在登录成功后按当前迭代数重哈希 |
+| M-4 邮箱未验证可抢注 | 已修 | 文档/目录/团队成员添加均校验 `email_verified`（`TARGET_UNVERIFIED`）；未配置 Resend 的实例自动视为已验证，避免功能锁死 |
+| M-5 邮件链接信任 Host | 已修 | 新增 `SITE_URL` 优先 + `ALLOWED_HOSTS` 白名单；`isSecureRequest` 不再信任 `X-Forwarded-Proto` |
+| M-6 安全响应头缺失 | 已修 | `_headers` 增加 CSP（`script-src 'self'`，无 `unsafe-inline`）、HSTS、XFO、Permissions-Policy；API 统一 `nosniff` + `Referrer-Policy` |
+| M-7 ADMIN_EMAIL 静默提权 | 已修 | `bootstrap.ts` 只创建不存在的账号；已存在但不满足条件只打警告 |
+| M-8 资源强缓存 | 已修 | 改为 `private, max-age=300, must-revalidate` |
+| P2 其余项 | 已修 | 会话 7 天 + 滑动续期、令牌原子消费、`readJson` 体积上限、`__proto__` 键过滤、LIKE 转义、删号级联（文档/素材/授权/目录/令牌）、回收站清理改 `POST /documents/purge-trash`、404 不回显路径、`/api/health` 只回 ok、robots.txt 修正、邀请码最短 8 位、CORS 未命中不再下发 `ACAC` |
+
+**仍未闭环（受平台或产品约束）**：
+
+1. **PBKDF2 迭代数仍为 100000**：Cloudflare Workers 的 WebCrypto 对该参数有硬上限，超过会直接抛错导致线上登录全挂。代码已支持「登录成功后按默认值重哈希」，等平台放开或迁移到 Workers 之外时可平滑提升。
+2. **分布式限流**：当前限流是 isolate 内计数，跨实例不共享；建议在 Cloudflare 侧另配 Rate Limiting 规则（或 Durable Object）作为补充。
+3. **Cookie 前缀 / 跨站隔离域名**：`__Host-` 前缀会让本地 http 调试失效，未启用；素材独立域名需要额外 DNS 与绑定，作为后续架构改造项（当前已用 CSP sandbox + 拒绝危险 SVG + 同源 iframe 拦截覆盖同一攻击面）。
+
+---
+
 ## 附录 B：一句话总结
 
-> 权限与数据模型是"做对了"的部分；**上传内容的渲染信任**（SVG/iframe）和**资源治理**（配额/限流）是"漏了"的部分。先修 H-1/H-2/H-3，再补限流、CSP 与邮箱验证，风险面即可收敛到可接受水平。
+> 权限与数据模型是"做对了"的部分；**上传内容的渲染信任**（SVG/iframe）和**资源治理**（配额/限流）是"漏了"的部分。上述两项已于当日修复并补齐回归用例，剩余风险主要集中在平台约束（PBKDF2 上限、跨实例限流）。

@@ -28,7 +28,9 @@ export function TeamManageDialog({
   useEffect(() => {
     if (!team) return;
     setError(null);
-    setToken(team.inviteToken);
+    // 令牌明文只在生成/重置时返回一次，列表接口不再下发；
+    // 这里清空旧值，避免把「上次生成、已经失效」的令牌展示给用户
+    setToken(null);
     void load(team.id).catch((caught) =>
       setError(caught instanceof ApiError ? caught.message : '加载成员失败')
     );
@@ -64,7 +66,7 @@ export function TeamManageDialog({
             })
           }
         >
-          {token ? '重置邀请令牌' : '生成邀请令牌'}
+          {token || team?.inviteEnabled ? '重置邀请令牌' : '生成邀请令牌'}
         </button>
         {token ? (
           <button

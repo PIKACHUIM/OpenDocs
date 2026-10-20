@@ -20,9 +20,6 @@ export interface ApiBindings {
   FILE_DRIVER?: string;
   EDGEONE_BLOB_STORE?: string;
 
-  /** 允许访问的 Host（逗号分隔）；不填表示不限制，用于反代/自定义域名场景 */
-  ALLOWED_HOSTS?: string;
-
   /** 本地开发 / 测试注入的实现（Workers 上不会出现） */
   SQL?: SqlClient;
   FILES?: FileStore;
@@ -50,6 +47,13 @@ export interface ApiBindings {
 
   /** 跨域调试时允许的来源，逗号分隔；同域部署留空 */
   CORS_ORIGIN?: string;
+
+  /**
+   * 允许出现在「邮件链接」里的域名（逗号分隔）。
+   * 未配置 SITE_URL 时会回退到请求域名；配置了白名单后，不在名单内的 Host
+   * 一律拒绝生成邮件链接，避免 Host 头把找回密码令牌带到攻击者域名。
+   */
+  ALLOWED_HOSTS?: string;
 }
 
 export interface Runtime {

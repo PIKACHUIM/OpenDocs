@@ -148,7 +148,7 @@ export function TeamAdminPanel() {
                       })
                     }
                   >
-                    {team.inviteToken ? '重置邀请链接' : '生成邀请链接'}
+                    {team.inviteEnabled ? '重置邀请链接' : '生成邀请链接'}
                   </button>
                   <button
                     type="button"
@@ -168,9 +168,9 @@ export function TeamAdminPanel() {
                 </div>
               </div>
 
-              {team.inviteToken ? (
+              {team.inviteEnabled ? (
                 <div className={styles.hint} style={{ marginTop: 8 }}>
-                  邀请令牌：<code>{team.inviteToken}</code>（同一空间只会有一个，重置后旧令牌失效）
+                  已生成邀请令牌（出于安全考虑不再回显，点「重置邀请链接」可复制新令牌；重置后旧令牌立即失效）
                 </div>
               ) : null}
 
