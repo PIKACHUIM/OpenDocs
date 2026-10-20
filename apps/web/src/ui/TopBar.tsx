@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import { ApiError, authApi, documentApi, emptyContentFor, type DocumentType } from '../api';
+import { useState, type ReactNode } from 'react';
+import { ApiError, authApi, type DocumentType } from '../api';
 import { navigate, useRoute } from '../lib/router';
 import { useAuth } from '../lib/auth';
 import { Dropdown, DropdownItem } from './Dropdown';
+import { NewDocumentDialog } from './NewDocumentDialog';
 import styles from './common.module.scss';
 
 /**
@@ -16,25 +17,21 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const { user, isAdmin, logout, config } = useAuth();
   const route = useRoute();
 
+  const [newDocType, setNewDocType] = useState<DocumentType | null>(null);
+
   const navItem = (active: boolean) =>
     active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem;
 
-  /** 顶栏快捷新建：已登录直接建云端文档，未登录进试用模式 */
-  const quickCreate = async (type: DocumentType) => {
+  /**
+   * 顶栏类型入口：不直接建文档，先弹出「最近文档 + 选模板」。
+   * 未登录时仍然进试用模式（草稿存本地，可保存到账号）。
+   */
+  const openNew = (type: DocumentType) => {
     if (!user) {
       navigate(`/try/${type}`);
       return;
     }
-    try {
-      const data = await documentApi.create({
-        type,
-        title: '未命名文档',
-        content: emptyContentFor(type),
-      });
-      navigate(`/d/${data.document.id}`);
-    } catch (error) {
-      window.alert(error instanceof ApiError ? error.message : '创建文档失败');
-    }
+    setNewDocType(type);
   };
 
   return (
@@ -54,26 +51,28 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <button
           type="button"
           className={navItem(route.kind === 'local')}
-          onClick={() => navigate('/local')}
+          onClick={() => openNew('mindmap')}
         >
           Mind 思维导图
         </button>
-        <button type="button" className={styles.navItem} onClick={() => quickCreate('word')}>
+        <button type="button" className={styles.navItem} onClick={() => openNew('word')}>
           Word 文档
         </button>
-        <button type="button" className={styles.navItem} onClick={() => quickCreate('excel')}>
+        <button type="button" className={styles.navItem} onClick={() => openNew('excel')}>
           Excel 表格
         </button>
-        <button type="button" className={styles.navItem} onClick={() => quickCreate('ppt')}>
+        <button type="button" className={styles.navItem} onClick={() => openNew('ppt')}>
           PPT 演示
         </button>
-        <button type="button" className={styles.navItem} onClick={() => quickCreate('markdown')}>
+        <button type="button" className={styles.navItem} onClick={() => openNew('markdown')}>
           Markdown 文档
         </button>
         <button type="button" className={styles.navItem} onClick={() => navigate('/image')}>
           PicEdit 图片
         </button>
       </nav>
+
+      <NewDocumentDialog type={newDocType} onClose={() => setNewDocType(null)} />
 
       {children}
       <span className={styles.grow} />

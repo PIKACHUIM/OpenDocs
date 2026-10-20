@@ -352,6 +352,119 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   background: #fafbfc;
 }
 
+// 新建文档弹窗：最近文档 + 模板选择
+.dialogSection {
+  margin-bottom: 22px;
+}
+
+.dialogSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.dialogSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text;
+}
+
+.recentList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $border;
+  border-radius: $radius;
+  overflow: hidden;
+}
+
+.recentItem {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid #f2f3f5;
+  background: $surface;
+  text-align: left;
+  font-size: 13px;
+  color: $text;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: $surface-hover;
+  }
+}
+
+.recentItemTitle {
+  flex: 1;
+  min-width: 0;
+  @include ellipsis;
+}
+
+.recentItemTime {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: $muted;
+  font-variant-numeric: tabular-nums;
+}
+
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 10px;
+}
+
+.templateCard {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid $border;
+  border-radius: $radius;
+  background: $surface;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: $primary-border;
+    background: $surface-hover;
+  }
+}
+
+.templateCardActive {
+  border-color: $primary;
+  background: $primary-soft;
+  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
+
+  &:hover {
+    border-color: $primary;
+    background: $primary-soft;
+  }
+}
+
+.templateCardTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: $text;
+}
+
+.templateCardHint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: $muted;
+}
+
 // ---------------------------------------------------------------------------
 // 页面骨架
 // ---------------------------------------------------------------------------

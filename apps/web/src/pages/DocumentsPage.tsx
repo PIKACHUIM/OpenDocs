@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   documentApi,
-  emptyContentFor,
   folderApi,
   type ApiDocument,
   type ApiFolder,
@@ -13,6 +12,7 @@ import { navigate } from '../lib/router';
 import { useAuth } from '../lib/auth';
 import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import { Modal } from '../ui/Modal';
+import { NewDocumentDialog } from '../ui/NewDocumentDialog';
 import { ShareDialog } from '../ui/ShareDialog';
 import { TopBar, VerifyEmailBanner } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
@@ -123,6 +123,8 @@ export function DocumentsPage() {
   const [contextMenu, setContextMenu] = useState<ContextTarget | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
+  /** 选完类型后打开的新建弹窗（最近文档 + 模板） */
+  const [newDocType, setNewDocType] = useState<DocumentType | null>(null);
   const [shareTarget, setShareTarget] = useState<ApiDocument | null>(null);
   const [renameTarget, setRenameTarget] = useState<ApiDocument | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -210,24 +212,6 @@ export function DocumentsPage() {
   }, [folderId, folderMap]);
 
   const currentFolderName = folderId ? folderMap.get(folderId)?.name ?? '目录' : SCOPE_LABEL[scope];
-
-  const createDocument = async (type: DocumentType) => {
-    setBusy(true);
-    try {
-      const data = await documentApi.create({
-        type,
-        title: `未命名${TYPE_META[type].label}`,
-        content: emptyContentFor(type),
-        folderId: scope === 'owned' ? folderId : null,
-      });
-      navigate(`/d/${data.document.id}`);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '创建失败');
-    } finally {
-      setBusy(false);
-      setCreateOpen(false);
-    }
-  };
 
   const createFolder = async () => {
     if (!folderName.trim()) return;
@@ -747,7 +731,11 @@ export function DocumentsPage() {
               className={styles.card}
               style={{ border: 'none', textAlign: 'left' }}
               disabled={busy}
-              onClick={() => createDocument(type)}
+              onClick={() => {
+                // 选完类型后进入「最近文档 + 选模板」，与顶栏入口保持一致
+                setCreateOpen(false);
+                setNewDocType(type);
+              }}
             >
               <div className={styles.cardIcon}>
                 <DocIcon type={type} />
@@ -757,6 +745,12 @@ export function DocumentsPage() {
           ))}
         </div>
       </Modal>
+
+      <NewDocumentDialog
+        type={newDocType}
+        folderId={scope === 'owned' ? folderId : null}
+        onClose={() => setNewDocType(null)}
+      />
 
       <Modal open={folderModalOpen} title="新建目录" onClose={() => setFolderModalOpen(false)}>
         <div className={styles.field}>
