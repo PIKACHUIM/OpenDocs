@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { ApiEnv } from '../context';
-import { canWrite, resolveDocumentAccess } from '../lib/access';
+import { permissionsToAccess, resolvePermissions } from '../lib/access';
 import {
   assertContentSize,
   emptyContentFor,
@@ -26,6 +26,7 @@ import {
   type DocumentMemberRole,
   type DocumentRecord,
   type DocumentType,
+  type PermissionSet,
 } from '../repos/types';
 
 export const documentRoutes = new Hono<ApiEnv>();
@@ -40,48 +41,60 @@ function assertType(type: unknown): DocumentType {
   return type as DocumentType;
 }
 
+/**
+ * 取文档并算出有效权限。
+ * 优先级：文件 > 空间 > 文件夹（> 链接分享），与产品规则一致。
+ */
 async function loadAccessible(c: Context<ApiEnv>, id: string) {
   const document = await c.get('repos').documents.getActive(id);
   if (!document) throw notFound('文档不存在或已被删除');
   const user = c.get('user')!;
-  const memberRole = await c.get('repos').members.getRole(id, user.id);
-  let access = resolveDocumentAccess({ document, user, memberRole });
+  const repos = c.get('repos');
 
-  // 团队空间的文档：权限由团队成员表与「只读模式」决定
-  if (document.team_id && user.role !== 'admin') {
-    const member = await c.get('repos').teams.getMember(document.team_id, user.id);
-    const team = await c.get('repos').teams.getById(document.team_id);
-    if (!member) {
-      // 不是成员也不是管理员：只有原所有者能看
-      access = document.owner_id === user.id ? 'owner' : 'none';
-    } else if (member.is_admin) {
-      access = 'owner';
-    } else if (team?.readonly) {
-      // 只读空间：普通成员只能看
-      access = 'viewer';
-    } else {
-      access = member.can_update ? 'editor' : 'viewer';
+  const documentPermissions = await repos.members.getPermissions(id, user.id);
+
+  let teamPermissions: (PermissionSet & { isAdmin?: boolean }) | null = null;
+  let teamReadonly = false;
+  if (document.team_id) {
+    const [member, team] = await Promise.all([
+      repos.teams.getMember(document.team_id, user.id),
+      repos.teams.getById(document.team_id),
+    ]);
+    teamReadonly = !!team?.readonly;
+    if (member) {
+      teamPermissions = {
+        canCreate: !!member.can_create,
+        canRead: true,
+        canUpdate: !!member.can_update,
+        canDelete: !!member.can_delete,
+        isAdmin: !!member.is_admin,
+      };
     }
   }
 
-  return { document, access };
-}
+  let folderPermissions: PermissionSet | null = null;
+  if (document.folder_id) {
+    const row = await repos.folderMembers.get(document.folder_id, user.id);
+    if (row) {
+      folderPermissions = {
+        canCreate: !!row.can_create,
+        canRead: !!row.can_read,
+        canUpdate: !!row.can_update,
+        canDelete: !!row.can_delete,
+      };
+    }
+  }
 
-/** 团队成员的删除权限（只读模式下只有团队管理员能删） */
-async function canDeleteDocument(
-  c: Context<ApiEnv>,
-  document: DocumentRecord
-): Promise<boolean> {
-  const user = c.get('user')!;
-  if (user.role === 'admin') return true;
-  if (!document.team_id) return document.owner_id === user.id;
-  if (document.owner_id === user.id) return true;
-  const team = await c.get('repos').teams.getById(document.team_id);
-  const member = await c.get('repos').teams.getMember(document.team_id, user.id);
-  if (!member) return false;
-  if (member.is_admin) return true;
-  if (team?.readonly) return false;
-  return !!member.can_delete;
+  const permissions = resolvePermissions({
+    document,
+    user,
+    documentPermissions,
+    teamPermissions,
+    teamReadonly,
+    folderPermissions,
+  });
+
+  return { document, permissions, access: permissionsToAccess(permissions) };
 }
 
 documentRoutes.get('/', async (c) => {
@@ -199,11 +212,15 @@ documentRoutes.post('/', async (c) => {
   const type = assertType(body.type);
   const title = optionalString(body.title, 120) ?? '未命名文档';
 
-  // 目录必须是自己的，否则会变成「把文档挂到别人目录下」
+  // 目录：自己的目录直接可用；别人分享的目录需要「新建」权限
   let folderId: string | null = null;
   if (typeof body.folderId === 'string' && body.folderId.trim()) {
     const folder = await c.get('repos').folders.getActive(body.folderId.trim());
-    if (!folder || folder.owner_id !== user.id) throw badRequest('目标目录不存在');
+    if (!folder) throw badRequest('目标目录不存在');
+    if (folder.owner_id !== user.id) {
+      const grant = await c.get('repos').folderMembers.get(folder.id, user.id);
+      if (!grant?.can_create) throw forbidden('没有在该目录新建文档的权限');
+    }
     folderId = folder.id;
   }
 
@@ -250,8 +267,8 @@ documentRoutes.post('/', async (c) => {
 });
 
 documentRoutes.get('/:id', async (c) => {
-  const { document, access } = await loadAccessible(c, c.req.param('id'));
-  if (access === 'none') throw forbidden('没有权限访问该文档');
+  const { document, permissions, access } = await loadAccessible(c, c.req.param('id'));
+  if (!permissions.canRead) throw forbidden('没有权限访问该文档');
 
   const raw = await getText(c.get('runtime').files, document.content_key);
   const owner = await c.get('repos').users.getById(document.owner_id);
@@ -262,15 +279,17 @@ documentRoutes.get('/:id', async (c) => {
   }
 
   return json({
-    document: toPublicDocument(document, { ownerName: owner?.display_name, myRole: access }),
+    document: toPublicDocument(document, { ownerName: owner?.display_name, myRole: access === 'none' ? undefined : access }),
     content: raw ? JSON.parse(raw) : emptyContentFor(document.type),
     access,
+    // 前端据此决定「浏览模式」与按钮可用性
+    permissions,
   });
 });
 
 documentRoutes.put('/:id', async (c) => {
-  const { document, access } = await loadAccessible(c, c.req.param('id'));
-  if (!canWrite(access)) throw forbidden('没有权限修改该文档');
+  const { document, permissions, access } = await loadAccessible(c, c.req.param('id'));
+  if (!permissions.canUpdate) throw forbidden('没有权限修改该文档');
 
   const body = await readJson<{ content?: unknown; title?: unknown; baseVersion?: unknown }>(
     c.req.raw
@@ -299,21 +318,21 @@ documentRoutes.put('/:id', async (c) => {
       {
         error: '文档已在其它设备被修改，请刷新后再保存',
         code: 'VERSION_CONFLICT',
-        document: toPublicDocument(result.document as DocumentRecord, { myRole: access }),
+        document: toPublicDocument(result.document as DocumentRecord, { myRole: access === 'none' ? undefined : access }),
       },
       409
     );
   }
 
   return json({
-    document: toPublicDocument(result.document ?? document, { myRole: access }),
+    document: toPublicDocument(result.document ?? document, { myRole: access === 'none' ? undefined : access }),
     elementCount: summarizeContent(content),
   });
 });
 
 documentRoutes.patch('/:id', async (c) => {
-  const { document, access } = await loadAccessible(c, c.req.param('id'));
-  if (!canWrite(access)) throw forbidden('没有权限修改该文档');
+  const { document, permissions, access } = await loadAccessible(c, c.req.param('id'));
+  if (!permissions.canUpdate) throw forbidden('没有权限修改该文档');
   const body = await readJson<{ title?: unknown; folderId?: unknown; starred?: unknown }>(c.req.raw);
 
   let updated: DocumentRecord | null = document;
@@ -345,14 +364,13 @@ documentRoutes.patch('/:id', async (c) => {
     updated = await c.get('repos').documents.setStarred(document.id, !!body.starred);
   }
 
-  return json({ document: updated ? toPublicDocument(updated, { myRole: access }) : null });
+  return json({ document: updated ? toPublicDocument(updated, { myRole: access === 'none' ? undefined : access }) : null });
 });
 
 documentRoutes.delete('/:id', async (c) => {
-  const { document, access } = await loadAccessible(c, c.req.param('id'));
+  const { document, permissions } = await loadAccessible(c, c.req.param('id'));
   // 团队空间里，拥有删除权限的成员也可以删除（只读模式下只有团队管理员可以）
-  const allowed = access === 'owner' || (access !== 'none' && (await canDeleteDocument(c, document)));
-  if (!allowed) throw forbidden('没有删除该文档的权限');
+  if (!permissions.canDelete) throw forbidden('没有删除该文档的权限');
 
   const permanent = c.req.query('permanent') === 'true';
   if (permanent) {
@@ -460,10 +478,30 @@ documentRoutes.post('/:id/members', async (c) => {
     throw forbidden('只有所有者可以添加协作成员');
   }
 
-  const body = await readJson<{ email?: unknown; role?: unknown }>(c.req.raw);
+  const body = await readJson<{
+    email?: unknown;
+    role?: unknown;
+    canRead?: unknown;
+    canUpdate?: unknown;
+  }>(c.req.raw);
   const email = requireEmail(body.email);
-  const role = requireString(body.role, 'role');
-  if (role !== 'viewer' && role !== 'editor') throw badRequest('role 只能是 viewer 或 editor');
+
+  // 兼容旧调用（role），新调用可直接传 canRead / canUpdate。
+  // 删除权限不对协作者开放：只有所有者能删除。
+  const legacyRole = typeof body.role === 'string' ? body.role : undefined;
+  if (legacyRole && legacyRole !== 'viewer' && legacyRole !== 'editor') {
+    throw badRequest('role 只能是 viewer 或 editor');
+  }
+  // 没显式指定就走「新用户默认权限」设置
+  const defaults = await c.get('settings').defaultPermissions();
+  const canUpdate =
+    typeof body.canUpdate === 'boolean'
+      ? body.canUpdate
+      : legacyRole
+        ? legacyRole === 'editor'
+        : defaults.canUpdate;
+  const canRead = typeof body.canRead === 'boolean' ? body.canRead : defaults.canRead || canUpdate;
+  if (!canRead && !canUpdate) throw badRequest('至少要保留读取权限');
 
   const target = await c.get('repos').users.getByEmail(email);
   if (!target) throw notFound('该邮箱未注册，无法添加为协作成员', 'USER_NOT_FOUND');
@@ -472,8 +510,10 @@ documentRoutes.post('/:id/members', async (c) => {
   await c.get('repos').members.upsert({
     documentId: document.id,
     userId: target.id,
-    role,
+    role: canUpdate ? 'editor' : 'viewer',
     grantedBy: actor.id,
+    canRead,
+    canUpdate,
   });
   return json({ ok: true });
 });

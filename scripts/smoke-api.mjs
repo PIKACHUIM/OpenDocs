@@ -564,6 +564,75 @@ console.log('\n[9] 团队空间：创建 / 邀请 / 加入 / 权限 / 只读 / �
   check('删除团队空间后列表不可再访问', afterDelete.status === 404, afterDelete.data);
 }
 
+console.log('\n[10] 文档级权限：读/改分开、删除只属所有者');
+{
+  cookie = adminCookie;
+  const doc = await call('POST', '/api/documents', { type: 'markdown', title: '权限测试' });
+  const docId = doc.data?.document?.id ?? '';
+
+  // 只给读取：可读、不可改
+  const shareRead = await call('POST', `/api/documents/${docId}/members`, {
+    email: 'carol@example.com',
+    canRead: true,
+    canUpdate: false,
+  });
+  check('按读取权限分享', shareRead.status === 200, shareRead.data);
+
+  cookie = carolCookie;
+  const readOk = await call('GET', `/api/documents/${docId}`);
+  check('只读协作者可以打开', readOk.status === 200 && readOk.data?.permissions?.canUpdate === false, readOk.data);
+
+  const writeBlocked = await call('PUT', `/api/documents/${docId}`, {
+    content: { type: 'markdown', version: 1, markdown: '改内容', mindmaps: {} },
+  });
+  check('只读协作者不能修改', writeBlocked.status === 403, writeBlocked.data);
+
+  const deleteBlocked = await call('DELETE', `/api/documents/${docId}`);
+  check('协作者不能删除（删除只属所有者）', deleteBlocked.status === 403, deleteBlocked.data);
+
+  // 提升为可修改
+  cookie = adminCookie;
+  await call('POST', `/api/documents/${docId}/members`, {
+    email: 'carol@example.com',
+    canRead: true,
+    canUpdate: true,
+  });
+  cookie = carolCookie;
+  const writeOk = await call('PUT', `/api/documents/${docId}`, {
+    content: { type: 'markdown', version: 1, markdown: '改内容', mindmaps: {} },
+  });
+  check('授予修改后可保存', writeOk.status === 200, writeOk.data);
+
+  // 目录分享：授权读取 + 新建
+  cookie = adminCookie;
+  const folder = await call('POST', '/api/folders', { name: '分享目录' });
+  const folderId = folder.data?.folder?.id ?? '';
+  const shareFolder = await call('POST', `/api/folders/${folderId}/members`, {
+    email: 'carol@example.com',
+    canCreate: true,
+    canRead: true,
+    canUpdate: false,
+    canDelete: false,
+  });
+  check('目录可分享并授权', shareFolder.status === 200, shareFolder.data);
+
+  cookie = carolCookie;
+  const folderList = await call('GET', '/api/folders');
+  check(
+    '被分享者能看到该目录',
+    Array.isArray(folderList.data?.folders) &&
+      folderList.data.folders.some((item) => item.id === folderId && item.shared === true),
+    folderList.data
+  );
+
+  const createInShared = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '在分享目录里新建',
+    folderId,
+  });
+  check('有新建权限时可在分享目录建文档', createInShared.status === 201, createInShared.data);
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));

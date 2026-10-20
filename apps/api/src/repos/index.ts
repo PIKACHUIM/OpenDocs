@@ -3,7 +3,7 @@ import { createAssetRepo } from './assets';
 import { createDocumentRepo } from './documents';
 import { createFolderRepo } from './folders';
 import { createInviteRepo } from './invites';
-import { createMemberRepo } from './members';
+import { createFolderMemberRepo, createMemberRepo } from './members';
 import { createSettingsRepo } from './settings';
 import { createAuthTokenRepo, createSessionRepo } from './sessions';
 import { createTeamRepo } from './teams';
@@ -18,6 +18,7 @@ export function createRepositories(sql: SqlClient) {
     folders: createFolderRepo(sql),
     invites: createInviteRepo(sql),
     members: createMemberRepo(sql),
+    folderMembers: createFolderMemberRepo(sql),
     assets: createAssetRepo(sql),
     settings: createSettingsRepo(sql),
     teams: createTeamRepo(sql),

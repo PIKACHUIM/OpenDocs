@@ -14,6 +14,11 @@ export const SETTINGS_KEYS = {
   uploadMaxFileBytes: 'upload_max_file_bytes',
   quotaUserBytes: 'quota_user_bytes',
   quotaSystemBytes: 'quota_system_bytes',
+  // 新用户/新分享的默认权限（创建/读取/修改/删除）
+  defaultCanCreate: 'default_can_create',
+  defaultCanRead: 'default_can_read',
+  defaultCanUpdate: 'default_can_update',
+  defaultCanDelete: 'default_can_delete',
   resendApiKey: 'resend_api_key',
   resendFrom: 'resend_from',
   turnstileEnabled: 'turnstile_enabled',
@@ -134,6 +139,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
       inviteRequired: await inviteRequired(db),
       trashRetentionDays: await trashRetentionDays(db),
       ...(await uploadPolicy(db)),
+      defaultPermissions: await defaultPermissions(db),
       resendApiKeySet: !!resend.apiKey,
       resendApiKeyMasked: maskSecret(resend.apiKey),
       resendFrom: resend.from,
@@ -147,6 +153,26 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
   /**
    * 上传与容量策略（管理后台可配，未配置时用默认值）。
    */
+  /**
+   * 新用户/新分享的默认权限。
+   * 分享时不显式指定权限，就以这里的值为准。
+   * 删除默认关闭：文档删除只属于所有者。
+   */
+  const defaultPermissions = async (db?: Record<string, string>) => {
+    const data = db ?? (await load());
+    const readBool = (key: string, fallback: boolean) => {
+      const value = data[key];
+      if (value === undefined) return fallback;
+      return value === 'true' || value === '1';
+    };
+    return {
+      canCreate: readBool(SETTINGS_KEYS.defaultCanCreate, false),
+      canRead: readBool(SETTINGS_KEYS.defaultCanRead, true),
+      canUpdate: readBool(SETTINGS_KEYS.defaultCanUpdate, false),
+      canDelete: readBool(SETTINGS_KEYS.defaultCanDelete, false),
+    };
+  };
+
   const uploadPolicy = async (db?: Record<string, string>) => {
     const data = db ?? (await load());
     const readNumber = (key: string, fallback: number) => {
@@ -171,6 +197,7 @@ export function createSettingsService(repo: SettingsRepo, env: ApiBindings) {
     inviteRequired,
     trashRetentionDays,
     uploadPolicy,
+    defaultPermissions,
     resendConfig,
     turnstileConfig,
     publicConfig,

@@ -451,6 +451,9 @@ export function DocumentsPage() {
         <>
           {/* 与右键菜单保持同一组操作，避免两处行为不一致 */}
           <DropdownItem onClick={() => openDocument(doc)}>打开</DropdownItem>
+          <DropdownItem onClick={() => navigate(`/d/${doc.id}?mode=view`)}>
+            以浏览模式打开
+          </DropdownItem>
           <DropdownItem
             onClick={() => {
               setRenameTarget(doc);
@@ -488,6 +491,12 @@ export function DocumentsPage() {
         </span>
         {doc.starred ? <span className={`${styles.tag} ${styles.tagMuted}`}>已收藏</span> : null}
         {doc.linkShared ? <span className={`${styles.tag} ${styles.tagMuted}`}>已分享</span> : null}
+        <span
+          className={`${styles.tag} ${doc.myRole === 'viewer' ? styles.tagMuted : ''}`}
+          title="当前账号对该文档的权限"
+        >
+          {doc.myRole === 'owner' ? '可删除' : doc.myRole === 'editor' ? '可编辑' : '只读'}
+        </span>
       </span>
       <span>{doc.myRole === 'owner' || !doc.ownerName ? '我' : doc.ownerName}</span>
       <span>{locationLabel(doc)}</span>
@@ -929,6 +938,16 @@ export function DocumentsPage() {
             }}
           >
             打开
+          </button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+              navigate(`/d/${menuDoc.id}?mode=view`);
+            }}
+          >
+            以浏览模式打开
           </button>
           <button
             type="button"

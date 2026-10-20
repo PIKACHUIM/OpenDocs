@@ -210,6 +210,7 @@ adminRoutes.patch('/settings', async (c) => {
     uploadMaxFileBytes?: unknown;
     quotaUserBytes?: unknown;
     quotaSystemBytes?: unknown;
+    defaultPermissions?: unknown;
     resendApiKey?: unknown;
     resendFrom?: unknown;
     turnstileEnabled?: unknown;
@@ -249,6 +250,20 @@ adminRoutes.patch('/settings', async (c) => {
     const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10);
     if (!Number.isFinite(value) || value < min) throw badRequest('容量设置不合法');
     entries[key] = String(Math.floor(value));
+  }
+
+  // 新用户/新分享的默认权限
+  if (body.defaultPermissions && typeof body.defaultPermissions === 'object') {
+    const perms = body.defaultPermissions as Record<string, unknown>;
+    const map: Array<[string, string]> = [
+      ['canCreate', SETTINGS_KEYS.defaultCanCreate],
+      ['canRead', SETTINGS_KEYS.defaultCanRead],
+      ['canUpdate', SETTINGS_KEYS.defaultCanUpdate],
+      ['canDelete', SETTINGS_KEYS.defaultCanDelete],
+    ];
+    for (const [field, key] of map) {
+      if (typeof perms[field] === 'boolean') entries[key] = perms[field] ? 'true' : 'false';
+    }
   }
 
   setOrClear(SETTINGS_KEYS.siteName, body.siteName);

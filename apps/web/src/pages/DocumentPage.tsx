@@ -67,9 +67,13 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
   const { document, content, canWrite } = session;
   const title = document.title;
 
+  // 浏览模式：显式 ?mode=view，或当前用户没有编辑权限时自动进入
+  const forcedView = new URLSearchParams(window.location.search).get('mode') === 'view';
+  const readOnly = forcedView || !canWrite;
+
   // 图片文档有自己的画布布局（无 DocumentShell），统一跳到图片编辑页的云端模式
   if (document.type === 'image' && kind === 'document') {
-    navigate(`/image?id=${document.id}`);
+    navigate(`/image?id=${document.id}${readOnly ? '&mode=view' : ''}`);
     return <div className={styles.center}>正在打开图片编辑器…</div>;
   }
 
@@ -159,7 +163,8 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
               ];
 
   const shared = {
-    canWrite,
+    // 浏览模式下所有编辑器一律只读
+    canWrite: !readOnly,
     documentId: editorContext.documentId,
     shareToken: editorContext.shareToken,
   };
@@ -168,18 +173,25 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
     <DocumentShell
       document={document}
       shareMode={session.shareMode}
-      canWrite={canWrite}
+      canWrite={!readOnly}
       syncStatus={session.syncStatus}
       onRename={kind === 'document' ? session.renameNow : undefined}
       onBack={handleBack}
       toolbar={
-        <Dropdown trigger={<span className={styles.button}>{exporting ? '导出中…' : '导出'}</span>} align="left">
-          {exportItems.map((item) => (
-            <DropdownItem key={item.label} onClick={item.onSelect}>
-              {item.label}
-            </DropdownItem>
-          ))}
-        </Dropdown>
+        <>
+          {readOnly ? (
+            <span className={`${styles.tag} ${styles.tagMuted}`} title="浏览模式下无法编辑内容">
+              浏览模式
+            </span>
+          ) : null}
+          <Dropdown trigger={<span className={styles.button}>{exporting ? '导出中…' : '导出'}</span>} align="left">
+            {exportItems.map((item) => (
+              <DropdownItem key={item.label} onClick={item.onSelect}>
+                {item.label}
+              </DropdownItem>
+            ))}
+          </Dropdown>
+        </>
       }
     >
       <Suspense fallback={<div className={styles.center} style={{ position: 'absolute', inset: 0 }}>加载编辑器…</div>}>

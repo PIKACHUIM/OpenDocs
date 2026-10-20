@@ -155,6 +155,20 @@ export const SCHEMA_STATEMENTS: string[] = [
     PRIMARY KEY (team_id, user_id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members (user_id, created_at DESC)`,
+
+  // 文件夹分享：自己的目录可以分享给别人，按读/建/改/删授权
+  `CREATE TABLE IF NOT EXISTS folder_members (
+    folder_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    can_create INTEGER NOT NULL DEFAULT 0,
+    can_read INTEGER NOT NULL DEFAULT 1,
+    can_update INTEGER NOT NULL DEFAULT 0,
+    can_delete INTEGER NOT NULL DEFAULT 0,
+    granted_by TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (folder_id, user_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_folder_members_user ON folder_members (user_id, created_at DESC)`,
 ];
 
 /**
@@ -168,6 +182,9 @@ const COLUMN_PATCHES: string[] = [
   'ALTER TABLE documents ADD COLUMN last_opened_at TEXT',
   // 文档归属的团队空间；NULL 表示个人空间
   'ALTER TABLE documents ADD COLUMN team_id TEXT',
+  // 文档级权限：查看/修改（删除只属于所有者，不开放授权）
+  'ALTER TABLE document_members ADD COLUMN can_read INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE document_members ADD COLUMN can_update INTEGER NOT NULL DEFAULT 0',
 ];
 
 const ready = new Map<string, Promise<void>>();

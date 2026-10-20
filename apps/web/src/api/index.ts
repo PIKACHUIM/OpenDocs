@@ -14,6 +14,7 @@ import type {
   DocumentAccess,
   DocumentMember,
   DocumentMemberRole,
+  PermissionSet,
   DocumentType,
   LinkShareMode,
   PublicConfig,
@@ -95,9 +96,13 @@ export const documentApi = {
     api<{ document: ApiDocument }>(`/documents/${id}`, { method: 'PATCH', json: patch }),
 
   get: (id: string) =>
-    api<{ document: ApiDocument; content: DocumentContent; access: DocumentAccess }>(
-      `/documents/${id}`
-    ),
+    api<{
+      document: ApiDocument;
+      content: DocumentContent;
+      access: DocumentAccess;
+      /** 有效权限（含来源），用于判断浏览模式与按钮可用性 */
+      permissions?: PermissionSet;
+    }>(`/documents/${id}`),
 
   save: (id: string, json: { content: DocumentContent; title?: string; baseVersion?: number }) =>
     api<{ document: ApiDocument; elementCount?: number }>(`/documents/${id}`, {
@@ -130,8 +135,16 @@ export const documentApi = {
 
   listMembers: (id: string) => api<{ members: DocumentMember[] }>(`/documents/${id}/members`),
 
-  addMember: (id: string, email: string, role: DocumentMemberRole) =>
-    api<{ ok: boolean }>(`/documents/${id}/members`, { method: 'POST', json: { email, role } }),
+  addMember: (
+    id: string,
+    email: string,
+    permissions?: { canRead: boolean; canUpdate: boolean },
+    role?: DocumentMemberRole
+  ) =>
+    api<{ ok: boolean }>(`/documents/${id}/members`, {
+      method: 'POST',
+      json: { email, role: role ?? (permissions?.canUpdate ? 'editor' : 'viewer'), ...permissions },
+    }),
 
   removeMember: (id: string, userId: string) =>
     api<{ ok: boolean }>(`/documents/${id}/members/${userId}`, { method: 'DELETE' }),
@@ -247,6 +260,7 @@ export const adminApi = {
     uploadMaxFileBytes?: number;
     quotaUserBytes?: number;
     quotaSystemBytes?: number;
+    defaultPermissions?: PermissionSet;
     resendApiKey?: string | null;
     resendFrom?: string;
     turnstileEnabled?: boolean;

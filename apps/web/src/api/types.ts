@@ -117,11 +117,25 @@ export interface AdminInviteCode {
   usable: boolean;
 }
 
+/** 统一权限结构：文件夹/团队/文档共用 */
+export interface PermissionSet {
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  /** 权限来源，用于向用户解释为什么是只读 */
+  source?: 'admin' | 'owner' | 'document' | 'team' | 'folder' | 'link' | 'none';
+}
+
 export interface DocumentMember {
   userId: string;
   email: string;
   displayName: string;
   role: DocumentMemberRole;
+  /** 是否可查看 */
+  canRead?: boolean;
+  /** 是否可修改（删除只属于所有者） */
+  canUpdate?: boolean;
   createdAt: string;
 }
 
@@ -148,6 +162,8 @@ export interface AdminSettings {
   maxFileBytes: number;
   userQuotaBytes: number;
   systemQuotaBytes: number;
+  /** 新用户/新分享的默认权限 */
+  defaultPermissions?: PermissionSet;
   resendApiKeySet: boolean;
   resendApiKeyMasked: string | null;
   resendFrom: string | null;

@@ -16,7 +16,9 @@ export function ShareDialog({ open, onClose, document, onChanged }: ShareDialogP
   const [token, setToken] = useState<string | null>(null);
   const [members, setMembers] = useState<DocumentMember[]>([]);
   const [memberEmail, setMemberEmail] = useState('');
-  const [memberRole, setMemberRole] = useState<'viewer' | 'editor'>('editor');
+  /** 新协作者的默认权限：可读默认开，可改默认关 */
+  const [newCanRead, setNewCanRead] = useState(true);
+  const [newCanUpdate, setNewCanUpdate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -80,12 +82,39 @@ export function ShareDialog({ open, onClose, document, onChanged }: ShareDialogP
     setBusy(true);
     setError(null);
     try {
-      await documentApi.addMember(document.id, memberEmail.trim(), memberRole);
+      await documentApi.addMember(document.id, memberEmail.trim(), {
+        canRead: newCanRead,
+        canUpdate: newCanUpdate,
+      });
       setMemberEmail('');
       const data = await documentApi.listMembers(document.id);
       setMembers(data.members);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '添加协作者失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 调整已有协作者的权限：服务端按 (文档, 用户) 做 upsert */
+  const updateMember = async (
+    member: DocumentMember,
+    patch: { canRead?: boolean; canUpdate?: boolean }
+  ) => {
+    const canRead = patch.canRead ?? member.canRead ?? true;
+    const canUpdate = patch.canUpdate ?? member.canUpdate ?? member.role === 'editor';
+    if (!canRead && !canUpdate) {
+      setError('至少要保留读取权限');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await documentApi.addMember(document.id, member.email, { canRead, canUpdate });
+      const data = await documentApi.listMembers(document.id);
+      setMembers(data.members);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '更新权限失败');
     } finally {
       setBusy(false);
     }
@@ -198,19 +227,29 @@ export function ShareDialog({ open, onClose, document, onChanged }: ShareDialogP
               onChange={(event) => setMemberEmail(event.target.value)}
               style={{ flex: 1 }}
             />
-            <select
-              className={styles.select}
-              style={{ width: 110 }}
-              value={memberRole}
-              onChange={(event) => setMemberRole(event.target.value as 'viewer' | 'editor')}
-            >
-              <option value="viewer">只读</option>
-              <option value="editor">可编辑</option>
-            </select>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={newCanRead}
+                onChange={(event) => setNewCanRead(event.target.checked)}
+              />
+              读取
+            </label>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={newCanUpdate}
+                onChange={(event) => setNewCanUpdate(event.target.checked)}
+              />
+              修改
+            </label>
             <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} onClick={addMember} disabled={busy}>
               添加
             </button>
           </div>
+          <p className={styles.hint} style={{ marginTop: -6, marginBottom: 12 }}>
+            删除权限不对协作者开放，只有文档所有者可以删除。
+          </p>
 
           {members.length === 0 ? (
             <div className={styles.hint}>还没有添加协作者，对方需要先注册账号才能被分享。</div>
@@ -223,9 +262,36 @@ export function ShareDialog({ open, onClose, document, onChanged }: ShareDialogP
                     <div className={styles.hint}>{member.email}</div>
                   </div>
                   <div className={styles.row}>
-                    <span className={member.role === 'editor' ? styles.tag : styles.tagMuted}>
-                      {member.role === 'editor' ? '可编辑' : '只读'}
-                    </span>
+                    <label className={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={member.canRead ?? true}
+                        disabled={busy}
+                        onChange={(event) =>
+                          updateMember(member, {
+                            canRead: event.target.checked,
+                          })
+                        }
+                      />
+                      读取
+                    </label>
+                    <label className={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={member.canUpdate ?? member.role === 'editor'}
+                        disabled={busy}
+                        onChange={(event) =>
+                          updateMember(member, {
+                            canUpdate: event.target.checked,
+                          })
+                        }
+                      />
+                      修改
+                    </label>
+                    <label className={styles.checkboxRow} title="删除只属于所有者">
+                      <input type="checkbox" checked={false} disabled />
+                      删除
+                    </label>
                     <button
                       type="button"
                       className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}

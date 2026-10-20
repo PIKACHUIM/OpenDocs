@@ -88,6 +88,11 @@ export function AdminPage() {
     maxFileMB: number;
     userQuotaMB: number;
     systemQuotaMB: number;
+    /** 新用户/新分享默认权限 */
+    defCanCreate: boolean;
+    defCanRead: boolean;
+    defCanUpdate: boolean;
+    defCanDelete: boolean;
     resendApiKey: string;
     resendFrom: string;
     turnstileEnabled: boolean;
@@ -141,6 +146,10 @@ export function AdminPage() {
         maxFileMB: Math.round(data.maxFileBytes / 1024 / 1024),
         userQuotaMB: Math.round(data.userQuotaBytes / 1024 / 1024),
         systemQuotaMB: Math.round(data.systemQuotaBytes / 1024 / 1024),
+        defCanCreate: data.defaultPermissions?.canCreate ?? false,
+        defCanRead: data.defaultPermissions?.canRead ?? true,
+        defCanUpdate: data.defaultPermissions?.canUpdate ?? false,
+        defCanDelete: data.defaultPermissions?.canDelete ?? false,
         resendApiKey: '',
         resendFrom: data.resendFrom ?? '',
         turnstileEnabled: data.turnstileEnabled,
@@ -242,6 +251,12 @@ export function AdminPage() {
         uploadMaxFileBytes: settingsForm.maxFileMB * 1024 * 1024,
         quotaUserBytes: settingsForm.userQuotaMB * 1024 * 1024,
         quotaSystemBytes: settingsForm.systemQuotaMB * 1024 * 1024,
+        defaultPermissions: {
+          canCreate: settingsForm.defCanCreate,
+          canRead: settingsForm.defCanRead,
+          canUpdate: settingsForm.defCanUpdate,
+          canDelete: settingsForm.defCanDelete,
+        },
         resendApiKey: settingsForm.resendApiKey ? settingsForm.resendApiKey : undefined,
         resendFrom: settingsForm.resendFrom,
         turnstileEnabled: settingsForm.turnstileEnabled,
@@ -991,6 +1006,53 @@ export function AdminPage() {
                 }
               />
             </div>
+
+            <h3 style={{ fontSize: 14, margin: '20px 0 10px' }}>新用户 / 新分享默认权限</h3>
+            <div className={styles.row} style={{ flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={settingsForm.defCanCreate}
+                  onChange={(event) =>
+                    setSettingsForm({ ...settingsForm, defCanCreate: event.target.checked })
+                  }
+                />
+                创建
+              </label>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={settingsForm.defCanRead}
+                  onChange={(event) =>
+                    setSettingsForm({ ...settingsForm, defCanRead: event.target.checked })
+                  }
+                />
+                读取
+              </label>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={settingsForm.defCanUpdate}
+                  onChange={(event) =>
+                    setSettingsForm({ ...settingsForm, defCanUpdate: event.target.checked })
+                  }
+                />
+                修改
+              </label>
+              <label className={styles.checkboxRow} title="文档删除始终只属于所有者">
+                <input
+                  type="checkbox"
+                  checked={settingsForm.defCanDelete}
+                  onChange={(event) =>
+                    setSettingsForm({ ...settingsForm, defCanDelete: event.target.checked })
+                  }
+                />
+                删除
+              </label>
+            </div>
+            <p className={styles.hint} style={{ marginBottom: 12 }}>
+              分享文档/目录时若未单独勾选，就按这里的默认值授权。文档删除权限不对协作者开放。
+            </p>
 
             <h3 style={{ fontSize: 14, margin: '20px 0 10px' }}>Resend 邮件配置</h3>
             <div className={styles.field}>

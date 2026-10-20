@@ -307,6 +307,9 @@ export function PosterEditor() {
 
   if (!ready) return <div style={{ padding: 40, color: '#86909c' }}>加载中…</div>;
 
+  // 浏览模式：?mode=view 时只读，隐藏左右面板并禁用画布交互
+  const readonly = new URLSearchParams(window.location.search).get('mode') === 'view';
+
   return (
     <div className={styles.editor}>
       <TopBar />
@@ -315,9 +318,11 @@ export function PosterEditor() {
           className={styles.titleInput}
           value={title}
           placeholder="未命名的设计"
+          readOnly={readonly}
           onChange={(event) => setTitle(event.target.value)}
           onBlur={rename}
         />
+        {readonly ? <span className={styles.status}>浏览模式</span> : null}
         <span className={styles.status}>
           {saveState === 'saving'
             ? '保存中…'
@@ -390,14 +395,17 @@ export function PosterEditor() {
       </div>
 
       <div className={styles.body}>
-        <WidgetPanel />
+        {readonly ? null : <WidgetPanel />}
         <div className={styles.stage}>
-          <PosterCanvas
-            drawMode={drawMode}
-            brushColor={brushColor}
-            brushWidth={brushWidth}
-            onStrokeDone={() => setDrawMode(false)}
-          />
+          {/* 浏览模式用一层透明遮罩吃掉指针事件，避免误拖/误改 */}
+          <div style={readonly ? { pointerEvents: 'none', width: '100%', height: '100%' } : undefined}>
+            <PosterCanvas
+              drawMode={readonly ? false : drawMode}
+              brushColor={brushColor}
+              brushWidth={brushWidth}
+              onStrokeDone={() => setDrawMode(false)}
+            />
+          </div>
           <div className={styles.zoomBar}>
             <button type="button" className={styles.zoomButton} onClick={() => setZoom(zoom - 10)}>
               −
@@ -408,10 +416,12 @@ export function PosterEditor() {
             </button>
           </div>
         </div>
-        <StylePanel
-          onReplaceImage={(uuid) => setPicker({ mode: 'replace', uuid })}
-          onPickBackground={() => setPicker({ mode: 'background' })}
-        />
+        {readonly ? null : (
+          <StylePanel
+            onReplaceImage={(uuid) => setPicker({ mode: 'replace', uuid })}
+            onPickBackground={() => setPicker({ mode: 'background' })}
+          />
+        )}
       </div>
 
       <AssetPicker

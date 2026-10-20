@@ -293,8 +293,46 @@ export interface DocumentMemberRecord {
   document_id: string;
   user_id: string;
   role: DocumentMemberRole;
+  /** 1 = 可查看 */
+  can_read: number;
+  /** 1 = 可修改；删除始终只属于所有者 */
+  can_update: number;
   granted_by: string | null;
   created_at: string;
+}
+
+/** 文件夹分享授权 */
+export interface FolderMemberRecord {
+  folder_id: string;
+  user_id: string;
+  can_create: number;
+  can_read: number;
+  can_update: number;
+  can_delete: number;
+  granted_by: string | null;
+  created_at: string;
+}
+
+/** 统一权限结构（前端展示与判断都用它） */
+export interface PermissionSet {
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+export function toPermissionSet(record: {
+  can_create?: number;
+  can_read?: number;
+  can_update?: number;
+  can_delete?: number;
+} | null): PermissionSet {
+  return {
+    canCreate: !!record?.can_create,
+    canRead: !!record?.can_read,
+    canUpdate: !!record?.can_update,
+    canDelete: !!record?.can_delete,
+  };
 }
 
 export interface PublicDocument {
