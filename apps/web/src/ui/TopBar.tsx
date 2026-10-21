@@ -1,3 +1,4 @@
+import { alertDialog } from './dialog';
 import { useState, type ReactNode } from 'react';
 import { ApiError, authApi, type DocumentType } from '../api';
 import { navigate, useRoute } from '../lib/router';
@@ -126,9 +127,9 @@ export function VerifyEmailBanner() {
   const resend = async () => {
     try {
       await authApi.resendVerifyEmail();
-      window.alert('验证邮件已重新发送，请查收');
+      void alertDialog('验证邮件已重新发送，请查收');
     } catch (caught) {
-      window.alert(caught instanceof ApiError ? caught.message : '发送失败');
+      void alertDialog(caught instanceof ApiError ? caught.message : '发送失败');
     } finally {
       void refresh();
     }

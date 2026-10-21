@@ -1,3 +1,4 @@
+import { alertDialog, confirmDialog } from '../ui/dialog';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import localforage from 'localforage';
 import {
@@ -111,14 +112,13 @@ export function LocalDraftPage({ type }: { type: TryType }) {
    * 返回：回首页而不是丢给登录页。
    * 有内容时先确认，避免误触把正在编辑的草稿丢掉。
    */
-  const handleBack = useCallback(() => {
-    if (
-      hasContent &&
-      !window.confirm(
-        '当前内容只保存在这台设备上，离开后仍可回来继续编辑。\n\n确定要离开吗？'
-      )
-    ) {
-      return;
+  const handleBack = useCallback(async () => {
+    if (hasContent) {
+      const ok = await confirmDialog(
+        '当前内容只保存在这台设备上，离开后仍可回来继续编辑。\n\n确定要离开吗？',
+        { title: '离开当前草稿', confirmText: '离开' }
+      );
+      if (!ok) return;
     }
     navigate('/');
   }, [hasContent]);
@@ -176,7 +176,7 @@ export function LocalDraftPage({ type }: { type: TryType }) {
       await localforage.removeItem(storageKey);
       navigate(`/d/${data.document.id}`);
     } catch (error) {
-      window.alert(error instanceof ApiError ? error.message : '保存失败');
+      void alertDialog(error instanceof ApiError ? error.message : '保存失败');
     } finally {
       setSaving(false);
     }
@@ -218,7 +218,7 @@ export function LocalDraftPage({ type }: { type: TryType }) {
     try {
       await task();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '导出失败');
+      void alertDialog(error instanceof Error ? error.message : '导出失败');
     } finally {
       setExporting(false);
     }

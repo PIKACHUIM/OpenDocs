@@ -1,3 +1,4 @@
+import { alertDialog } from '../../ui/dialog';
 import { Highlight } from '@tiptap/extension-highlight';
 import { Image } from '@tiptap/extension-image';
 import { TableKit } from '@tiptap/extension-table';
@@ -103,7 +104,7 @@ export function WordEditor({ content, canWrite, documentId, shareToken, onChange
       });
       editor.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '图片上传失败');
+      void alertDialog(error instanceof Error ? error.message : '图片上传失败');
     } finally {
       setUploading(false);
     }

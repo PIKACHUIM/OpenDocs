@@ -12,6 +12,7 @@ import {
 } from '../api';
 import { navigate } from '../lib/router';
 import { useAuth } from '../lib/auth';
+import { alertDialog, confirmDialog, promptDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import { Modal } from '../ui/Modal';
 import { NewDocumentDialog } from '../ui/NewDocumentDialog';
@@ -52,7 +53,7 @@ const SCOPE_LABEL: Record<Scope, string> = {
 
 /** 分区 tab 的顺序 */
 const SCOPE_ORDER: Array<{ key: Scope; label: string }> = [
-  { key: 'recent', label: '最近' },
+  { key: 'recent', label: '最近使用' },
   { key: 'owned', label: '我的文档' },
   { key: 'shared', label: '与我共享' },
   { key: 'sent', label: '我的分享' },
@@ -352,7 +353,7 @@ export function DocumentsPage() {
     const message = permanent
       ? `永久删除「${doc.title}」？该操作不可恢复。`
       : `将「${doc.title}」移入回收站？`;
-    if (!window.confirm(message)) return;
+    if (!(await confirmDialog(message, { danger: permanent, title: permanent ? '永久删除' : '移入回收站' }))) return;
     setBusy(true);
     try {
       await documentApi.remove(doc.id, permanent);
@@ -391,7 +392,7 @@ export function DocumentsPage() {
   const openDocument = (doc: ApiDocument) => {
     // 回收站里的文档已被标记删除，直接打开只会得到 404
     if (doc.deletedAt) {
-      window.alert('该文档在「最近删除」里，先恢复才能打开。');
+      void alertDialog('该文档在「最近删除」里，先恢复才能打开。');
       return;
     }
     navigate(`/d/${doc.id}`);
@@ -429,7 +430,11 @@ export function DocumentsPage() {
 
   const renameFolder = async (folder: ApiFolder) => {
     setContextMenu(null);
-    const next = window.prompt('重命名目录', folder.name);
+    const next = await promptDialog('请输入新的目录名称', {
+      title: '重命名目录',
+      value: folder.name,
+      confirmText: '保存',
+    });
     if (!next || !next.trim() || next.trim() === folder.name) return;
     setBusy(true);
     try {
@@ -444,7 +449,13 @@ export function DocumentsPage() {
 
   const removeFolder = async (folder: ApiFolder) => {
     setContextMenu(null);
-    if (!window.confirm(`删除目录「${folder.name}」？其中的文档会移动到上级目录，不会被删除。`)) {
+    if (
+      !(await confirmDialog(`删除目录「${folder.name}」？其中的文档会移动到上级目录，不会被删除。`, {
+        danger: true,
+        title: '删除目录',
+        confirmText: '删除',
+      }))
+    ) {
       return;
     }
     setBusy(true);
@@ -729,7 +740,11 @@ export function DocumentsPage() {
             type="button"
             className={styles.sidebarItem}
             onClick={async () => {
-              const token = window.prompt('粘贴团队邀请令牌（由管理员生成）');
+              const token = await promptDialog('粘贴团队邀请令牌（由管理员生成）', {
+                title: '加入团队',
+                placeholder: '邀请令牌',
+                confirmText: '加入',
+              });
               if (!token?.trim()) return;
               try {
                 const result = await teamApi.join(token.trim());
@@ -738,9 +753,9 @@ export function DocumentsPage() {
                 setScope('owned');
                 setFolderId(null);
                 setPage(1);
-                if (result.already) window.alert('你已经在这个团队里了');
+                if (result.already) void alertDialog('你已经在这个团队里了');
               } catch (caught) {
-                window.alert(caught instanceof ApiError ? caught.message : '加入失败');
+                void alertDialog(caught instanceof ApiError ? caught.message : '加入失败');
               }
             }}
           >

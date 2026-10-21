@@ -1,3 +1,4 @@
+import { alertDialog, confirmDialog } from '../../ui/dialog';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
@@ -141,8 +142,9 @@ export function TeamAdminPanel() {
                       run(async () => {
                         const data = await adminApi.rotateTeamInvite(team.id);
                         void copyToken(data.inviteToken);
-                        window.alert(
-                          `邀请令牌已生成并复制：\n${data.inviteToken}\n\n成员在「文档管理 → 加入团队」里粘贴即可。`
+                        await alertDialog(
+                          `邀请令牌已生成并复制：\n${data.inviteToken}\n\n成员在「文档管理 → 加入团队」里粘贴即可。`,
+                          { title: '邀请令牌' }
                         );
                         await load();
                       })
@@ -155,11 +157,15 @@ export function TeamAdminPanel() {
                     className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
                     disabled={busy}
                     onClick={() => {
-                      if (!window.confirm(`删除团队空间「${team.name}」？其中的文档会退回个人空间。`))
-                        return;
-                      void run(async () => {
-                        await adminApi.deleteTeam(team.id);
-                        await load();
+                      void confirmDialog(
+                        `删除团队空间「${team.name}」？其中的文档会退回个人空间。`,
+                        { danger: true, title: '删除团队空间', confirmText: '删除' }
+                      ).then((ok) => {
+                        if (!ok) return;
+                        void run(async () => {
+                          await adminApi.deleteTeam(team.id);
+                          await load();
+                        });
                       });
                     }}
                   >

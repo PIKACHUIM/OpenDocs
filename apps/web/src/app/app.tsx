@@ -13,6 +13,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 import { VerifyEmailPage } from '../pages/VerifyEmailPage';
+import { DialogHost } from '../ui/dialog';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
@@ -94,6 +95,8 @@ export function App() {
   return (
     <AuthProvider>
       <Router />
+      {/* 全局弹窗宿主：所有 alert / confirm / prompt 都走应用内样式 */}
+      <DialogHost />
     </AuthProvider>
   );
 }

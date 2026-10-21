@@ -1,3 +1,4 @@
+import { alertDialog } from '../../ui/dialog';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
@@ -116,7 +117,7 @@ export function MarkdownEditor({ content, canWrite, documentId, shareToken, onCh
       });
       insertAtCursor(`![${file.name}](${asset.url})`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '图片上传失败');
+      void alertDialog(error instanceof Error ? error.message : '图片上传失败');
     } finally {
       setUploading(false);
     }

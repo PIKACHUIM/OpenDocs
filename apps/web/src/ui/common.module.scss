@@ -1031,6 +1031,15 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
   color: $faint;
 }
 
+// 通用弹窗（alert / confirm / prompt）
+.dialogMessage {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: $text-secondary;
+  white-space: pre-wrap;
+}
+
 .listSize {
   text-align: right;
   font-size: 12px;

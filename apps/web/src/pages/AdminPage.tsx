@@ -1,3 +1,4 @@
+import { confirmDialog, promptDialog } from '../ui/dialog';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
@@ -291,8 +292,13 @@ export function AdminPage() {
       await loadInvites();
     }, invite.disabled ? '邀请码已启用' : '邀请码已停用');
 
-  const deleteInvite = (invite: AdminInviteCode) => {
-    if (!window.confirm(`删除邀请码「${invite.code}」？`)) return;
+  const deleteInvite = async (invite: AdminInviteCode) => {
+    const ok = await confirmDialog(`删除邀请码「${invite.code}」？`, {
+      danger: true,
+      title: '删除邀请码',
+      confirmText: '删除',
+    });
+    if (!ok) return;
     void run(async () => {
       await adminApi.deleteInvite(invite.id);
       await loadInvites();
@@ -468,11 +474,16 @@ export function AdminPage() {
                             className={`${styles.button} ${styles.buttonSm}`}
                             disabled={busy}
                             onClick={() => {
-                              const password = window.prompt(`为 ${item.email} 设置新密码（至少 8 位）`);
-                              if (!password) return;
-                              void run(async () => {
-                                await adminApi.updateUser(item.id, { password });
-                              }, '密码已重置，该用户所有会话已失效');
+                              void promptDialog(`为 ${item.email} 设置新密码（至少 8 位）`, {
+                                title: '重置密码',
+                                placeholder: '至少 8 位',
+                                confirmText: '重置',
+                              }).then((password) => {
+                                if (!password) return;
+                                void run(async () => {
+                                  await adminApi.updateUser(item.id, { password });
+                                }, '密码已重置，该用户所有会话已失效');
+                              });
                             }}
                           >
                             重置密码
@@ -488,11 +499,16 @@ export function AdminPage() {
                                   : undefined
                             }
                             onClick={() => {
-                              if (!window.confirm(`删除用户「${item.displayName}」？其名下 ${item.documentCount} 个文档会一并删除。`)) return;
-                              void run(async () => {
-                                await adminApi.deleteUser(item.id);
-                                await loadUsers(userPage, userQuery);
-                              }, '用户已删除');
+                              void confirmDialog(
+                                `删除用户「${item.displayName}」？其名下 ${item.documentCount} 个文档会一并删除。`,
+                                { danger: true, title: '删除用户', confirmText: '删除' }
+                              ).then((ok) => {
+                                if (!ok) return;
+                                void run(async () => {
+                                  await adminApi.deleteUser(item.id);
+                                  await loadUsers(userPage, userQuery);
+                                }, '用户已删除');
+                              });
                             }}
                           >
                             删除
@@ -590,11 +606,17 @@ export function AdminPage() {
                             className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
                             disabled={busy}
                             onClick={() => {
-                              if (!window.confirm(`彻底删除文档「${item.title}」？该操作不可恢复。`)) return;
-                              void run(async () => {
-                                await adminApi.deleteDocument(item.id);
-                                await loadDocuments(documentPage, documentQuery);
-                              }, '文档已删除');
+                              void confirmDialog(`彻底删除文档「${item.title}」？该操作不可恢复。`, {
+                                danger: true,
+                                title: '彻底删除',
+                                confirmText: '删除',
+                              }).then((ok) => {
+                                if (!ok) return;
+                                void run(async () => {
+                                  await adminApi.deleteDocument(item.id);
+                                  await loadDocuments(documentPage, documentQuery);
+                                }, '文档已删除');
+                              });
                             }}
                           >
                             删除
@@ -706,11 +728,17 @@ export function AdminPage() {
                             className={`${styles.button} ${styles.buttonSm} ${styles.buttonDanger}`}
                             disabled={busy}
                             onClick={() => {
-                              if (!window.confirm('删除该附件？引用它的文档会显示裂图。')) return;
-                              void run(async () => {
-                                await adminApi.deleteAsset(asset.id);
-                                await loadAssets(assetPage);
-                              }, '附件已删除');
+                              void confirmDialog('删除该附件？引用它的文档会显示裂图。', {
+                                danger: true,
+                                title: '删除附件',
+                                confirmText: '删除',
+                              }).then((ok) => {
+                                if (!ok) return;
+                                void run(async () => {
+                                  await adminApi.deleteAsset(asset.id);
+                                  await loadAssets(assetPage);
+                                }, '附件已删除');
+                              });
                             }}
                           >
                             删除

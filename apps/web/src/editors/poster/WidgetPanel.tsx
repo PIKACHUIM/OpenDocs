@@ -1,3 +1,4 @@
+import { confirmDialog } from '../../ui/dialog';
 /*
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -242,9 +243,16 @@ function TemplatePanel() {
   const load = usePosterStore((s) => s.load);
   const widgets = usePosterStore((s) => s.layouts[s.currentPage].layers);
 
-  const apply = (index: number) => {
+  const apply = async (index: number) => {
     const template = TEMPLATES[index];
-    if (widgets.length > 0 && !window.confirm('使用模板会替换当前画布内容，继续吗？')) return;
+    if (widgets.length > 0) {
+      const ok = await confirmDialog('使用模板会替换当前画布内容，继续吗？', {
+        danger: true,
+        title: '应用模板',
+        confirmText: '替换',
+      });
+      if (!ok) return;
+    }
     load([{ global: { ...template.page }, layers: [] }]);
     updatePage({ ...template.page });
     for (const layer of template.layers()) addWidget(layer);
@@ -255,7 +263,7 @@ function TemplatePanel() {
       <div className={styles.panelTitle}>版式模板</div>
       <div className={styles.templateGrid}>
         {TEMPLATES.map((template, index) => (
-          <button key={template.name} type="button" className={styles.templateItem} onClick={() => apply(index)}>
+          <button key={template.name} type="button" className={styles.templateItem} onClick={() => void apply(index)}>
             <div
               className={styles.templateCover}
               style={{ aspectRatio: `${template.page.width} / ${template.page.height}` }}

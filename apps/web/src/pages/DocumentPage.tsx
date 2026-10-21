@@ -1,3 +1,4 @@
+import { alertDialog, confirmDialog } from '../ui/dialog';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import type { DocumentContent, ExcelContent, MarkdownContent, MindmapContent, PptContent, WordContent } from '../api';
 import { DocumentShell } from '../editors/DocumentShell';
@@ -40,8 +41,15 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [unsaved]);
 
-  const handleBack = useCallback(() => {
-    if (unsaved && !window.confirm('还有改动没有保存到云端，确定离开吗？')) return;
+  const handleBack = useCallback(async () => {
+    if (unsaved) {
+      const ok = await confirmDialog('还有改动没有保存到云端，确定离开吗？', {
+        danger: true,
+        title: '离开当前文档',
+        confirmText: '离开',
+      });
+      if (!ok) return;
+    }
     navigate(kind === 'share' ? '/' : '/documents');
   }, [unsaved, kind]);
 
@@ -82,7 +90,7 @@ export function DocumentPage({ kind, id }: DocumentPageProps) {
     try {
       await task();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '导出失败');
+      void alertDialog(error instanceof Error ? error.message : '导出失败');
     } finally {
       setExporting(false);
     }

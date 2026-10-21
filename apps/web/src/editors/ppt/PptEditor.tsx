@@ -1,3 +1,4 @@
+import { confirmDialog, promptDialog } from '../../ui/dialog';
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   createId,
@@ -1123,8 +1124,13 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             className={styles.topbarButton}
             disabled={!canWrite}
             onClick={() => {
-              const src = window.prompt('视频地址（mp4 直链，或 YouTube / Bilibili 链接）');
-              if (src) addMedia('video', src.trim());
+              void promptDialog('视频地址（mp4 直链，或 YouTube / Bilibili 链接）', {
+                title: '插入视频',
+                placeholder: 'https://…',
+                confirmText: '插入',
+              }).then((src) => {
+                if (src) addMedia('video', src.trim());
+              });
             }}
           >
             视频
@@ -1134,8 +1140,13 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
             className={styles.topbarButton}
             disabled={!canWrite}
             onClick={() => {
-              const src = window.prompt('音频地址（mp3 直链）');
-              if (src) addMedia('audio', src.trim());
+              void promptDialog('音频地址（mp3 直链）', {
+                title: '插入音频',
+                placeholder: 'https://…',
+                confirmText: '插入',
+              }).then((src) => {
+                if (src) addMedia('audio', src.trim());
+              });
             }}
           >
             音频
@@ -1453,14 +1464,19 @@ export function PptEditor({ content, canWrite, documentId, onChange }: PptEditor
                 className={styles.propButton}
                 disabled={!canWrite}
                 onClick={() => {
-                  if (!window.confirm('将当前主题底色应用到所有页面？')) return;
-                  pushHistory();
-                  onChange({
-                    ...content,
-                    slides: slides.map((item) => ({
-                      ...item,
-                      background: item.background ?? theme.backgroundColor,
-                    })),
+                  void confirmDialog('将当前主题底色应用到所有页面？', {
+                    title: '应用主题',
+                    confirmText: '应用',
+                  }).then((ok) => {
+                    if (!ok) return;
+                    pushHistory();
+                    onChange({
+                      ...content,
+                      slides: slides.map((item) => ({
+                        ...item,
+                        background: item.background ?? theme.backgroundColor,
+                      })),
+                    });
                   });
                 }}
               >

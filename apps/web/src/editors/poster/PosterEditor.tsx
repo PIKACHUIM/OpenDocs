@@ -1,3 +1,4 @@
+import { alertDialog } from '../../ui/dialog';
 /*
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -145,7 +146,7 @@ export function PosterEditor() {
       });
       navigate(`/image?id=${data.document.id}`);
     } catch (error) {
-      window.alert(error instanceof ApiError ? error.message : '保存失败');
+      void alertDialog(error instanceof ApiError ? error.message : '保存失败');
     } finally {
       setCreating(false);
     }
@@ -169,7 +170,7 @@ export function PosterEditor() {
       const blob = await renderPoster(state.page(), state.widgets(), { scale: 1, format });
       download(blob, `${title || 'poster'}.${format === 'jpeg' ? 'jpg' : 'png'}`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '导出失败');
+      void alertDialog(error instanceof Error ? error.message : '导出失败');
     } finally {
       setExporting(false);
     }

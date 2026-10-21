@@ -1,3 +1,4 @@
+import { alertDialog } from '../ui/dialog';
 import { useCallback, useEffect, useState } from 'react';
 import { Drawnix, type DrawnixToolState, type ColorScheme, type ColorTheme } from '@drawnix/drawnix';
 import localforage from 'localforage';
@@ -115,7 +116,7 @@ export function LocalBoard() {
       });
       navigate(`/d/${data.document.id}`);
     } catch (error) {
-      window.alert(error instanceof ApiError ? error.message : '保存失败，请重试');
+      void alertDialog(error instanceof ApiError ? error.message : '保存失败，请重试');
     } finally {
       setSaving(false);
     }

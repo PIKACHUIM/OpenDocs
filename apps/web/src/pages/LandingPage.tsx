@@ -1,3 +1,4 @@
+import { alertDialog } from '../ui/dialog';
 import { useState } from 'react';
 import { ApiError, documentApi, emptyContentFor, type DocumentType } from '../api';
 import { useAuth } from '../lib/auth';
@@ -110,7 +111,7 @@ export function LandingPage() {
       });
       navigate(`/d/${data.document.id}`);
     } catch (error) {
-      window.alert(error instanceof ApiError ? error.message : '创建文档失败');
+      void alertDialog(error instanceof ApiError ? error.message : '创建文档失败');
     } finally {
       setBusy(false);
     }
