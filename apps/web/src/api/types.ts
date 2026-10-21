@@ -61,6 +61,11 @@ export interface ApiFolder {
   name: string;
   createdAt: string;
   updatedAt: string;
+  /** 是否是别人分享给我的目录；为 true 时不能重命名/删除/再分享 */
+  shared?: boolean;
+  ownerId?: string;
+  /** 我在该目录上的权限（分享来的目录才有） */
+  permissions?: PermissionSet;
 }
 
 /** 团队空间 */

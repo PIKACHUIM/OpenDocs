@@ -388,7 +388,14 @@ export function DocumentsPage() {
     }
   };
 
-  const openDocument = (doc: ApiDocument) => navigate(`/d/${doc.id}`);
+  const openDocument = (doc: ApiDocument) => {
+    // 回收站里的文档已被标记删除，直接打开只会得到 404
+    if (doc.deletedAt) {
+      window.alert('该文档在「最近删除」里，先恢复才能打开。');
+      return;
+    }
+    navigate(`/d/${doc.id}`);
+  };
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   /** 关闭右键菜单：点击任意处、滚动、ESC 都收起 */
@@ -452,51 +459,93 @@ export function DocumentsPage() {
     }
   };
 
+  type MenuItem = { key: string; label: string; danger?: boolean; run: () => void };
+
+  /**
+   * 文档菜单：按「所在范围 + 当前权限」生成，行内「⋯」与右键菜单共用同一份，
+   * 避免两处逻辑分叉（此前右键在回收站里还显示「移入回收站」）。
+   */
+  const docMenuItems = (doc: ApiDocument): MenuItem[] => {
+    // 回收站：只能恢复或彻底删除
+    if (scope === 'trash') {
+      return [
+        { key: 'restore', label: '恢复', run: () => void restoreDocument(doc) },
+        { key: 'purge', label: '永久删除', danger: true, run: () => void removeDocument(doc, true) },
+      ];
+    }
+
+    // 我的分享：管理的是「分享关系」，不是文件本身
+    if (scope === 'sent') {
+      return [
+        { key: 'open', label: '编辑', run: () => openDocument(doc) },
+        { key: 'view', label: '以浏览模式打开', run: () => navigate(`/d/${doc.id}?mode=view`) },
+        { key: 'share', label: '管理分享', run: () => setShareTarget(doc) },
+        { key: 'delete', label: '删除', danger: true, run: () => void removeDocument(doc) },
+      ];
+    }
+
+    const isOwner = doc.myRole === 'owner';
+    const canUpdate = doc.permissions?.canUpdate ?? isOwner;
+    const canDelete = doc.permissions?.canDelete ?? isOwner;
+    const items: MenuItem[] = [
+      { key: 'open', label: '打开', run: () => openDocument(doc) },
+      { key: 'view', label: '以浏览模式打开', run: () => navigate(`/d/${doc.id}?mode=view`) },
+    ];
+
+    // 「与我共享」是别人的文档：不改名、不移动、不删除
+    if (scope !== 'shared' && canUpdate) {
+      items.push({
+        key: 'rename',
+        label: '重命名',
+        run: () => {
+          setRenameTarget(doc);
+          setRenameValue(doc.title);
+        },
+      });
+      // 团队空间里的文档不属于个人目录，移动过去没有意义
+      if (!doc.teamId) {
+        items.push({ key: 'move', label: '移动到目录', run: () => setMoveTarget(doc) });
+      }
+    }
+
+    items.push({
+      key: 'star',
+      label: doc.starred ? '取消收藏' : '收藏',
+      run: () => void toggleStar(doc),
+    });
+
+    // 只有所有者能调整分享与权限
+    if (isOwner) {
+      items.push({ key: 'share', label: '设置权限 / 分享', run: () => setShareTarget(doc) });
+    }
+
+    items.push({ key: 'copy', label: '创建副本', run: () => void duplicateDocument(doc) });
+
+    if (canDelete) {
+      items.push({
+        key: 'delete',
+        label: '移入回收站',
+        danger: true,
+        run: () => void removeDocument(doc),
+      });
+    }
+
+    return items;
+  };
+
   const renderRowMenu = (doc: ApiDocument) => (
-    <Dropdown trigger={<span className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}>⋯</span>}>
-      {scope === 'trash' ? (
-        <>
-          <DropdownItem onClick={() => restoreDocument(doc)}>恢复</DropdownItem>
-          <DropdownItem onClick={() => removeDocument(doc, true)}>永久删除</DropdownItem>
-        </>
-      ) : scope === 'sent' ? (
-        // 「我的分享」管理的是「分享关系」，不是文件本身：
-        // 只保留编辑、浏览、管理分享和删除
-        <>
-          <DropdownItem onClick={() => openDocument(doc)}>编辑</DropdownItem>
-          <DropdownItem onClick={() => navigate(`/d/${doc.id}?mode=view`)}>
-            以浏览模式打开
-          </DropdownItem>
-          <DropdownItem onClick={() => setShareTarget(doc)}>管理分享</DropdownItem>
-          <DropdownItem onClick={() => removeDocument(doc)}>删除</DropdownItem>
-        </>
-      ) : (
-        <>
-          {/* 与右键菜单保持同一组操作，避免两处行为不一致 */}
-          <DropdownItem onClick={() => openDocument(doc)}>打开</DropdownItem>
-          <DropdownItem onClick={() => navigate(`/d/${doc.id}?mode=view`)}>
-            以浏览模式打开
-          </DropdownItem>
-          <DropdownItem
-            onClick={() => {
-              setRenameTarget(doc);
-              setRenameValue(doc.title);
-            }}
-          >
-            重命名
-          </DropdownItem>
-          <DropdownItem onClick={() => setMoveTarget(doc)}>移动到目录</DropdownItem>
-          <DropdownItem onClick={() => toggleStar(doc)}>
-            {doc.starred ? '取消收藏' : '收藏'}
-          </DropdownItem>
-          <DropdownItem onClick={() => setShareTarget(doc)}>设置权限 / 分享</DropdownItem>
-          <DropdownItem onClick={() => duplicateDocument(doc)}>创建副本</DropdownItem>
-          <DropdownItem onClick={() => removeDocument(doc)}>移入回收站</DropdownItem>
-        </>
-      )}
+    <Dropdown
+      trigger={
+        <span className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}>⋯</span>
+      }
+    >
+      {docMenuItems(doc).map((item) => (
+        <DropdownItem key={item.key} danger={item.danger} onClick={item.run}>
+          {item.label}
+        </DropdownItem>
+      ))}
     </Dropdown>
   );
-
   const locationLabel = (doc: ApiDocument) =>
     doc.folderId ? folderMap.get(doc.folderId)?.name ?? '目录' : '我的文档';
 
@@ -970,136 +1019,21 @@ export function DocumentsPage() {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
         >
-          {scope === 'sent' ? (
-            <>
-              <button
-                type="button"
-                className={styles.contextMenuItem}
-                onClick={() => {
-                  setContextMenu(null);
-                  openDocument(menuDoc);
-                }}
-              >
-                编辑
-              </button>
-              <button
-                type="button"
-                className={styles.contextMenuItem}
-                onClick={() => {
-                  setContextMenu(null);
-                  navigate(`/d/${menuDoc.id}?mode=view`);
-                }}
-              >
-                以浏览模式打开
-              </button>
-              <button
-                type="button"
-                className={styles.contextMenuItem}
-                onClick={() => {
-                  setContextMenu(null);
-                  setShareTarget(menuDoc);
-                }}
-              >
-                管理分享
-              </button>
-              <button
-                type="button"
-                className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
-                onClick={() => {
-                  setContextMenu(null);
-                  void removeDocument(menuDoc);
-                }}
-              >
-                删除
-              </button>
-            </>
-          ) : null}
-
-          {scope !== 'sent' ? (
-            <>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              openDocument(menuDoc);
-            }}
-          >
-            打开
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              navigate(`/d/${menuDoc.id}?mode=view`);
-            }}
-          >
-            以浏览模式打开
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              setRenameTarget(menuDoc);
-              setRenameValue(menuDoc.title);
-            }}
-          >
-            重命名
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              setMoveTarget(menuDoc);
-            }}
-          >
-            移动到目录
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              void toggleStar(menuDoc);
-            }}
-          >
-            {menuDoc.starred ? '取消收藏' : '收藏文档'}
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              setShareTarget(menuDoc);
-            }}
-          >
-            设置权限 / 分享
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              void duplicateDocument(menuDoc);
-            }}
-          >
-            创建副本
-          </button>
-          <button
-            type="button"
-            className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
-            onClick={() => {
-              setContextMenu(null);
-              void removeDocument(menuDoc);
-            }}
-          >
-            移到最近删除
-          </button>
-            </>
-          ) : null}
+          {docMenuItems(menuDoc).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`${styles.contextMenuItem} ${
+                item.danger ? styles.contextMenuItemDanger : ''
+              }`}
+              onClick={() => {
+                setContextMenu(null);
+                item.run();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       ) : null}
 
@@ -1120,41 +1054,46 @@ export function DocumentsPage() {
           >
             打开目录
           </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => void renameFolder(menuFolder)}
-          >
-            重命名
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              setFolderId(menuFolder.id);
-              setFolderModalOpen(true);
-            }}
-          >
-            新建子目录
-          </button>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              setContextMenu(null);
-              setFolderShare(menuFolder);
-            }}
-          >
-            设置权限 / 分享
-          </button>
-          <button
-            type="button"
-            className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
-            onClick={() => void removeFolder(menuFolder)}
-          >
-            删除目录
-          </button>
+          {/* 别人分享给我的目录：只能打开，不能改名/删/再分享 */}
+          {menuFolder.shared ? null : (
+            <>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => void renameFolder(menuFolder)}
+              >
+                重命名
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  setContextMenu(null);
+                  setFolderId(menuFolder.id);
+                  setFolderModalOpen(true);
+                }}
+              >
+                新建子目录
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  setContextMenu(null);
+                  setFolderShare(menuFolder);
+                }}
+              >
+                设置权限 / 分享
+              </button>
+              <button
+                type="button"
+                className={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`}
+                onClick={() => void removeFolder(menuFolder)}
+              >
+                删除目录
+              </button>
+            </>
+          )}
         </div>
       ) : null}
 
