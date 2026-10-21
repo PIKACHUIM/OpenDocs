@@ -592,14 +592,6 @@ export function DocumentsPage() {
       </span>
       <span className={styles.listSize}>{formatSize(doc.sizeBytes)}</span>
       <span className={styles.listRowActions} onClick={(event) => event.stopPropagation()}>
-        <button
-          type="button"
-          className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
-          title="在此位置新建文档"
-          onClick={() => setCreateOpen(true)}
-        >
-          +
-        </button>
         {renderRowMenu(doc)}
       </span>
     </div>
@@ -620,14 +612,6 @@ export function DocumentsPage() {
         {formatTime(doc.lastOpenedAt ?? doc.updatedAt)} · {formatSize(doc.sizeBytes)}
       </div>
       <div className={styles.cardMenu} onClick={(event) => event.stopPropagation()}>
-        <button
-          type="button"
-          className={`${styles.button} ${styles.buttonGhost} ${styles.buttonSm}`}
-          title="在此位置新建文档"
-          onClick={() => setCreateOpen(true)}
-        >
-          +
-        </button>
         {renderRowMenu(doc)}
       </div>
     </div>
@@ -703,6 +687,31 @@ export function DocumentsPage() {
             />
           </label>
 
+          {/* 个人空间：第一个固定是「我的文档」，目录在其下 */}
+          <div className={styles.sidebarSection}>个人空间</div>
+          <button
+            type="button"
+            className={`${styles.sidebarItem} ${
+              !teamId && scope === 'owned' && !folderId ? styles.sidebarItemActive : ''
+            }`}
+            onClick={() => {
+              setTeamId(null);
+              setScope('owned');
+              setFolderId(null);
+              setPage(1);
+            }}
+          >
+            <span className={styles.sidebarItemText}>我的文档</span>
+          </button>
+          {renderFolderTree(null, 0)}
+          <button
+            type="button"
+            className={styles.sidebarItem}
+            onClick={() => setFolderModalOpen(true)}
+          >
+            <span className={styles.sidebarItemText}>+ 新建目录</span>
+          </button>
+
           <div className={styles.sidebarSection}>团队空间</div>
           {teams.length > 0
             ? teams.map((team) => (
@@ -762,28 +771,48 @@ export function DocumentsPage() {
             <span className={styles.sidebarItemText}>+ 加入团队</span>
           </button>
 
-          <div className={styles.sidebarSection}>目录</div>
-          {renderFolderTree(null, 0)}
-          <button type="button" className={styles.sidebarItem} onClick={() => setFolderModalOpen(true)}>
-            <span className={styles.sidebarItemText}>+ 新建目录</span>
-          </button>
         </aside>
 
         <main className={styles.docsMain}>
           <div className={styles.tabs}>
-            {SCOPE_ORDER.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`${styles.tab} ${scope === item.key ? styles.tabActive : ''}`}
-                onClick={() => {
-                  setScope(item.key);
-                  setFolderId(null);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+            {/* 选中团队空间时，只保留与团队相关的三个页签 */}
+            {teamId
+              ? [
+                  { key: 'recent', label: '最近使用' },
+                  { key: 'team', label: '团队文档' },
+                  { key: 'trash', label: '最近删除' },
+                ].map((item) => {
+                  const active =
+                    item.key === 'team'
+                      ? scope !== 'recent' && scope !== 'trash'
+                      : scope === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`${styles.tab} ${active ? styles.tabActive : ''}`}
+                      onClick={() => {
+                        setFolderId(null);
+                        setScope(item.key === 'team' ? 'owned' : (item.key as Scope));
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })
+              : SCOPE_ORDER.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`${styles.tab} ${scope === item.key ? styles.tabActive : ''}`}
+                    onClick={() => {
+                      setScope(item.key);
+                      setFolderId(null);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
           </div>
 
           <div className={styles.docsToolbar}>
@@ -796,7 +825,9 @@ export function DocumentsPage() {
                   setFolderId(null);
                 }}
               >
-                {SCOPE_LABEL[scope]}
+                {teamId
+                  ? (teams.find((team) => team.id === teamId)?.name ?? '团队文档')
+                  : SCOPE_LABEL[scope]}
               </button>
               {breadcrumb.map((folder) => (
                 <span key={folder.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -853,6 +884,16 @@ export function DocumentsPage() {
                 卡片
               </button>
             </div>
+
+            {/* 新建入口放在视图切换右侧（原来塞在每一行的操作列里） */}
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary} ${styles.buttonSm}`}
+              title="新建文档"
+              onClick={() => setCreateOpen(true)}
+            >
+              + 新建
+            </button>
           </div>
 
           {error ? <div className={styles.error}>{error}</div> : null}

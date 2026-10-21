@@ -765,6 +765,30 @@ console.log('\n[13] 文档大小按 UTF-8 字节统计');
   );
 }
 
+console.log('\n[14] 回收站文档的永久删除');
+{
+  cookie = adminCookie;
+  const doc = await call('POST', '/api/documents', {
+    type: 'markdown',
+    title: '永久删除测试',
+    content: { type: 'markdown', version: 1, markdown: '内容', mindmaps: {} },
+  });
+  const id = doc.data?.document?.id;
+
+  const soft = await call('DELETE', `/api/documents/${id}`);
+  check('先移入回收站', soft.status === 200 && soft.data?.permanent === false, soft.data);
+
+  const again = await call('DELETE', `/api/documents/${id}`);
+  check('对已删除文档再次软删除保持幂等', again.status === 200, again.data);
+
+  // 关键：回收站里的文档必须能被永久删除（此前会 404）
+  const purge = await call('DELETE', `/api/documents/${id}?permanent=true`);
+  check('回收站文档可永久删除', purge.status === 200 && purge.data?.permanent === true, purge.data);
+
+  const gone = await call('GET', `/api/documents/${id}`);
+  check('永久删除后不可访问', gone.status === 404, gone.data);
+}
+
 console.log(`\n结果：${passed} 通过，${failures.length} 失败`);
 if (failures.length > 0) {
   console.log('失败项：', failures.join(', '));

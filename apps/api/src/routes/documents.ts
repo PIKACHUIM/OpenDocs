@@ -440,11 +440,30 @@ documentRoutes.patch('/:id', async (c) => {
 });
 
 documentRoutes.delete('/:id', async (c) => {
-  const { document, permissions } = await loadAccessible(c, c.req.param('id'));
-  // 团队空间里，拥有删除权限的成员也可以删除（只读模式下只有团队管理员可以）
-  if (!permissions.canDelete) throw forbidden('没有删除该文档的权限');
+  const user = c.get('user')!;
+  // 注意：回收站里的文档 deleted_at 不为空，不能用 getActive 查，
+  // 否则「永久删除」会返回 404（文档明明就在回收站里）。
+  const document = await c.get('repos').documents.getById(c.req.param('id'));
+  if (!document) throw notFound('文档不存在或已被删除');
 
   const permanent = c.req.query('permanent') === 'true';
+
+  if (document.deleted_at) {
+    // 已在回收站：只允许所有者 / 系统管理员 / 团队管理员操作
+    const teamMember =
+      document.team_id && user.role !== 'admin'
+        ? await c.get('repos').teams.getMember(document.team_id, user.id)
+        : null;
+    const allowed =
+      user.role === 'admin' || document.owner_id === user.id || !!teamMember?.is_admin;
+    if (!allowed) throw forbidden('没有删除该文档的权限');
+    // 非永久删除对已删除文档是空操作，直接返回成功，保持幂等
+    if (!permanent) return json({ ok: true, permanent: false });
+  } else {
+    const { permissions } = await loadAccessible(c, document.id);
+    // 团队空间里，拥有删除权限的成员也可以删除（只读模式下只有团队管理员可以）
+    if (!permissions.canDelete) throw forbidden('没有删除该文档的权限');
+  }
   if (permanent) {
     await c.get('runtime').files.delete(document.content_key);
     await c.get('repos').members.removeAllForDocument(document.id);
