@@ -82,19 +82,36 @@ export function PosterCanvas({
     const stage = stageRef.current;
     if (!stage) return;
     const fit = () => {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      // 首帧可能还没完成布局（宽高为 0），此时不能按「最小 10%」兜底，
+      // 否则会停在 10% 不再恢复；直接跳过，等 ResizeObserver 回调再算。
+      if (width < 80 || height < 80) return;
+
       const padding = 48;
       // 底部预留缩放条高度（44px），避免遮住画布下沿
       const next = Math.min(
-        (stage.clientWidth - padding) / page.width,
-        (stage.clientHeight - padding - 44) / page.height
+        (width - padding) / page.width,
+        (height - padding - 44) / page.height
       );
-      setZoom(Math.max(0.1, next) * 100);
+      setZoom(Math.max(10, Math.round(next * 100)));
     };
-    fit();
-    setReady(true);
+
+    // 先等一帧，让左右面板的 flex 布局落定
+    const raf = requestAnimationFrame(() => {
+      fit();
+      setReady(true);
+    });
     const observer = new ResizeObserver(fit);
     observer.observe(stage);
-    return () => observer.disconnect();
+    // 窗口尺寸变化时 ResizeObserver 在部分浏览器里不会立即回调，
+    // 再挂一个 window resize 兜底，避免缩放停留在旧值
+    window.addEventListener('resize', fit);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+    };
     // 只在画布尺寸变化时重新适配，缩放由用户控制
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.width, page.height]);

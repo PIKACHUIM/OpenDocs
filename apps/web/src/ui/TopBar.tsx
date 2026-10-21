@@ -67,7 +67,19 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <button type="button" className={styles.navItem} onClick={() => openNew('markdown')}>
           Markdown 文档
         </button>
-        <button type="button" className={styles.navItem} onClick={() => navigate('/image')}>
+        <button
+          type="button"
+          className={styles.navItem}
+          onClick={() => {
+            // 登录态也先弹「最近文档 + 模板」，与其它类型一致；
+            // 未登录直接进本地草稿编辑器
+            if (!user) {
+              navigate('/image');
+              return;
+            }
+            setNewDocType('image');
+          }}
+        >
           PicEdit 图片
         </button>
       </nav>

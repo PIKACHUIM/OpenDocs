@@ -397,8 +397,15 @@ export function PosterEditor() {
       <div className={styles.body}>
         {readonly ? null : <WidgetPanel />}
         <div className={styles.stage}>
-          {/* 浏览模式用一层透明遮罩吃掉指针事件，避免误拖/误改 */}
-          <div style={readonly ? { pointerEvents: 'none', width: '100%', height: '100%' } : undefined}>
+          {/* 包裹层必须始终撑满舞台：内层画布是 height:100%，
+              如果这里高度为 auto，stage 会变成 0 高，自适应缩放会一直算成最小值 */}
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              pointerEvents: readonly ? 'none' : undefined,
+            }}
+          >
             <PosterCanvas
               drawMode={readonly ? false : drawMode}
               brushColor={brushColor}

@@ -1040,7 +1040,20 @@ $shadow-lg: 0 12px 32px rgba(27, 31, 36, 0.12);
 
 .listWrap {
   @include card;
-  overflow: hidden;
+  // 不能用 overflow: hidden —— 行内的「⋯」下拉是绝对定位的，
+  // 会被这里裁掉，表现为「按钮点不动」（其实菜单开了但看不见）
+  overflow: visible;
+
+  // 圆角改由首尾行承担，避免 hover 背景溢出卡片圆角
+  .listRow:first-of-type {
+    border-top-left-radius: $radius;
+    border-top-right-radius: $radius;
+  }
+
+  .listRow:last-child {
+    border-bottom-left-radius: $radius;
+    border-bottom-right-radius: $radius;
+  }
 }
 
 // 表格（管理后台）

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiError, documentApi, emptyContentFor, type DocumentType } from '../api';
 import { useAuth } from '../lib/auth';
 import { navigate, type TryType } from '../lib/router';
+import { NewDocumentDialog } from '../ui/NewDocumentDialog';
 import { TopBar } from '../ui/TopBar';
 import styles from '../ui/common.module.scss';
 
@@ -83,10 +84,17 @@ const PROJECT_URL = 'https://github.com/PIKACHUIM/drawnix';
 export function LandingPage() {
   const { user, loading } = useAuth();
   const [busy, setBusy] = useState(false);
+  /** 图片类型走「最近文件 + 尺寸模板」弹窗，与其它类型一致 */
+  const [imageDialog, setImageDialog] = useState(false);
 
   const start = async (entry: Entry) => {
     if (entry.type === 'image') {
-      navigate('/image');
+      // 登录后先给「最近图片 + 尺寸模板」，未登录仍进本地草稿
+      if (!user) {
+        navigate('/image');
+        return;
+      }
+      setImageDialog(true);
       return;
     }
     if (!user) {
@@ -163,6 +171,11 @@ export function LandingPage() {
           ))}
         </div>
       </section>
+
+      <NewDocumentDialog
+        type={imageDialog ? 'image' : null}
+        onClose={() => setImageDialog(false)}
+      />
 
       <footer className={styles.landingFooter}>
         <div className={styles.footerBrand}>Open Docs</div>
